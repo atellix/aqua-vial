@@ -2,11 +2,13 @@ import { Buffer } from 'buffer'
 import { PublicKey } from '@solana/web3.js'
 import { Layout, Sequence, struct, nu64, ns64, seq, u16, u8, blob } from '@solana/buffer-layout'
 import BN from 'bn.js'
+import { base32Encode } from '@ctrl/ts-base32'
 import { logger } from './logger'
 import { AccountsNotificationPayload } from './rpc_client'
 import { MessageEnvelope } from './aqua_producer'
 import { AquaMarket, AquaMarketAccounts } from './types'
 
+// Input
 interface LogEntry {
     event_type: any,
     action_id: number,
@@ -20,6 +22,23 @@ interface LogEntry {
     price: number,
     ts: number,
 }
+
+// Output
+interface LogItem {
+    event_type: string,
+    action_id: number,
+    trade_id: number,
+    maker_order_id: string,
+    maker_filled: number,
+    maker: string,
+    taker: string,
+    taker_side: number,
+    amount: number,
+    price: number,
+    ts: number,
+}
+
+
 
 interface LogSlabVec {
     offset: any,
@@ -43,13 +62,6 @@ interface SlabAlloc {
     top_unused_page: number,
     type_page: TypedPage[],
     pages: any
-}
-
-interface LogItem {
-    event_type: string,
-    trade_id: number,
-    maker: string,
-    taker: string,
 }
 
 interface LogSpec {
@@ -77,6 +89,18 @@ export class DataMapper {
             logger.log('info', `${tradeLog}`)
         }
         //// yield this._putInEnvelope(recentTradesMessage, false)
+    }
+
+    private _encodeOrderId(orderIdBuf: any) {
+        var zflist = orderIdBuf.toJSON().data
+        var zflen = 16 - zflist.length
+        if (zflen > 0) {
+            var zfprefix = Array(zflen).fill(0)
+            zflist = zfprefix.concat(zflist)
+        }
+        zflist.reverse()
+        var res = base32Encode(new Uint8Array(zflist), 'Crockford').toLowerCase()
+        return res
     }
 
     private _decodeTradeLog(data: Buffer) {
@@ -153,12 +177,18 @@ export class DataMapper {
                     if (item['trade_id'] === 0) {
                         continue
                     }
-                    //item['maker_order_id'] = this.encodeOrderId(item['maker_order_id'])
                     var logItem: LogItem = {
                         event_type: (new BN(item['event_type'])).toString(),
+                        action_id: item['action_id'],
                         trade_id: item['trade_id'],
+                        maker_order_id: this._encodeOrderId(item['maker_order_id']),
+                        maker_filled: item['maker_filled'],
                         maker: new PublicKey(item['maker']).toString(),
-                        taker: new PublicKey(item['taker']).toString()
+                        taker: new PublicKey(item['taker']).toString(),
+                        taker_side: item['taker_side'],
+                        amount: item['amount'],
+                        price: item['price'],
+                        ts: item['ts'],
                     }
                     logSpec['logs'].push(logItem)
                     if (logSpec['logs'].length === pageTableEntry['alloc_items']) {

@@ -1,7 +1,7 @@
 import { Config } from '@blockworks-foundation/mango-client'
 import { MARKETS as DEFAULT_SERUM_MARKETS } from '@project-serum/serum'
 import didYouMean from 'didyoumean2'
-import { SerumMarket } from './types'
+import { AquaMarket } from './types'
 
 export const wait = (delayMS: number) => new Promise((resolve) => setTimeout(resolve, delayMS))
 
@@ -88,9 +88,9 @@ export class CircularBuffer<T> {
 const { BroadcastChannel } = require('worker_threads')
 
 export const minionReadyChannel = new BroadcastChannel('MinionReady') as BroadcastChannel
-export const serumProducerReadyChannel = new BroadcastChannel('SerumProducerReady') as BroadcastChannel
-export const serumDataChannel = new BroadcastChannel('SerumData') as BroadcastChannel
-export const serumMarketsChannel = new BroadcastChannel('SerumMarkets') as BroadcastChannel
+export const aquaProducerReadyChannel = new BroadcastChannel('SerumProducerReady') as BroadcastChannel
+export const aquaDataChannel = new BroadcastChannel('SerumData') as BroadcastChannel
+export const aquaMarketsChannel = new BroadcastChannel('AquaMarkets') as BroadcastChannel
 export const cleanupChannel = new BroadcastChannel('Cleanup') as BroadcastChannel
 
 export async function executeAndRetry<T>(
@@ -112,7 +112,7 @@ export async function executeAndRetry<T>(
   }
 }
 
-export function getMangoSpotMarkets(): SerumMarket[] {
+export function getMangoSpotMarkets(): AquaMarket[] {
   const mangoGroupConfig = Config.ids().groups.filter((group) => group.name === 'mainnet.1')[0]!
 
   return mangoGroupConfig.spotMarkets.map((market) => {
@@ -124,8 +124,8 @@ export function getMangoSpotMarkets(): SerumMarket[] {
     }
   })
 }
-export function getDefaultMarkets(): SerumMarket[] {
-  const defaultMarkets: SerumMarket[] = []
+export function getDefaultMarkets(): AquaMarket[] {
+  const defaultMarkets: AquaMarket[] = []
 
   for (const market of DEFAULT_SERUM_MARKETS) {
     if (market.deprecated) {

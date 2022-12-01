@@ -1,9 +1,9 @@
 import os from 'os'
 import path from 'path'
 import { Worker } from 'worker_threads'
-import { cleanupChannel, minionReadyChannel, serumProducerReadyChannel, wait } from './helpers'
+import { cleanupChannel, minionReadyChannel, aquaProducerReadyChannel, wait } from './helpers'
 import { logger } from './logger'
-import { SerumMarket } from './types'
+import { AquaMarket } from './types'
 
 export async function bootServer({
   port,
@@ -52,30 +52,30 @@ export async function bootServer({
     resolve()
   })
 
-  logger.log('info', `Starting serum producers for ${markets.length} markets, rpc endpoint: ${nodeEndpoint}`)
+  logger.log('info', `Starting aqua producers for ${markets.length} markets, rpc endpoint: ${nodeEndpoint}`)
 
   let readyProducersCount = 0
 
-  serumProducerReadyChannel.onmessage = () => readyProducersCount++
+  aquaProducerReadyChannel.onmessage = () => readyProducersCount++
 
   for (const market of markets) {
-    const serumProducerWorker = new Worker(path.resolve(__dirname, 'serum_producer.js'), {
+    const aquaProducerWorker = new Worker(path.resolve(__dirname, 'aqua_producer.js'), {
       workerData: { market, nodeEndpoint, commitment, wsEndpointPort }
     })
 
-    serumProducerWorker.on('error', (err) => {
+    aquaProducerWorker.on('error', (err) => {
       logger.log(
         'error',
-        `Serum producer worker ${serumProducerWorker.threadId} error occurred: ${err.message} ${err.stack}`
+        `Aqua producer worker ${aquaProducerWorker.threadId} error occurred: ${err.message} ${err.stack}`
       )
       throw err
     })
 
-    serumProducerWorker.on('exit', (code) => {
-      logger.log('error', `Serum producer worker: ${serumProducerWorker.threadId} died with code: ${code}`)
+    aquaProducerWorker.on('exit', (code) => {
+      logger.log('error', `Aqua producer worker: ${aquaProducerWorker.threadId} died with code: ${code}`)
     })
 
-    // just in case to not get hit by serum RPC node rate limits...
+    // just in case to not get hit by aqua RPC node rate limits...
     await wait(bootDelay)
   }
 
@@ -103,6 +103,6 @@ type BootOptions = {
   wsEndpointPort: number | undefined
   minionsCount: number
   commitment: string
-  markets: SerumMarket[]
+  markets: AquaMarket[]
   bootDelay: number
 }

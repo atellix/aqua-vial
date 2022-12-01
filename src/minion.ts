@@ -9,13 +9,13 @@ import {
   getAllowedValuesText,
   getDidYouMean,
   minionReadyChannel,
-  serumDataChannel,
-  serumMarketsChannel,
+  aquaDataChannel,
+  aquaMarketsChannel,
   wait
 } from './helpers'
 import { logger } from './logger'
-import { MessageEnvelope } from './serum_producer'
-import { ErrorResponse, RecentTrades, SerumListMarketItem, SerumMarket, SubRequest, SuccessResponse } from './types'
+import { MessageEnvelope } from './aqua_producer'
+import { ErrorResponse, RecentTrades, SerumListMarketItem, AquaMarket, SubRequest, SuccessResponse } from './types'
 
 const meta = {
   minionId: threadId
@@ -74,7 +74,7 @@ class Minion {
   private _tid: NodeJS.Timeout | undefined = undefined
 
   private MAX_BACKPRESSURE = 3 * 1024 * 1024
-  constructor(private readonly _nodeEndpoint: string, private readonly _markets: SerumMarket[]) {
+  constructor(private readonly _nodeEndpoint: string, private readonly _markets: AquaMarket[]) {
     this._marketNames = _markets.map((m) => m.name)
     this._server = this._initServer()
 
@@ -149,7 +149,7 @@ class Minion {
       res.aborted = true
     })
 
-    if (this._cachedListMarketsResponse === undefined) {
+    /*if (this._cachedListMarketsResponse === undefined) {
       const markets = await Promise.all(
         this._markets.map((market) => {
           return executeAndRetry(
@@ -185,7 +185,7 @@ class Minion {
 
       this._cachedListMarketsResponse = JSON.stringify(markets, null, 2)
       serumMarketsChannel.postMessage(this._cachedListMarketsResponse)
-    }
+    }*/
 
     await wait(1)
 
@@ -433,7 +433,7 @@ class Minion {
 const { port, nodeEndpoint, markets, minionNumber } = workerData as {
   port: number
   nodeEndpoint: string
-  markets: SerumMarket[]
+  markets: AquaMarket[]
   minionNumber: number
 }
 
@@ -454,13 +454,13 @@ if (minionNumber === 0) {
 }
 
 minion.start(port).then(() => {
-  serumDataChannel.onmessage = (message) => {
+  aquaDataChannel.onmessage = (message) => {
     lastPublishTimestamp = new Date()
 
     minion.processMessages(message.data)
   }
 
-  serumMarketsChannel.onmessage = (message) => {
+  aquaMarketsChannel.onmessage = (message) => {
     minion.initMarketsCache(message.data)
   }
 

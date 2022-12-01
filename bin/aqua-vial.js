@@ -6,10 +6,10 @@ const isDocker = require('is-docker')
 const pkg = require('../package.json')
 
 const DEFAULT_PORT = 8000
-const DEFAULT_NODE_ENDPOINT = 'https://solana-api.projectserum.com'
+const DEFAULT_NODE_ENDPOINT = 'https://api.devnet.solana.com'
 
 const argv = yargs
-  .scriptName('serum-vial')
+  .scriptName('aqua-vial')
   .env('SV_')
   .strict()
 
@@ -21,14 +21,14 @@ const argv = yargs
 
   .option('endpoint', {
     type: 'string',
-    describe: 'Solana RPC node endpoint that serum-vial uses as a data source',
+    describe: 'Solana RPC node endpoint that aqua-vial uses as a data source',
     default: DEFAULT_NODE_ENDPOINT
   })
 
   .option('ws-endpoint-port', {
     type: 'number',
     describe:
-      'Optional Solana RPC WS node endpoint port that serum-vial uses as a data source (if different than REST endpoint port)',
+      'Optional Solana RPC WS node endpoint port that aqua-vial uses as a data source (if different than REST endpoint port)',
     default: undefined
   })
 
@@ -54,7 +54,7 @@ const argv = yargs
 
   .option('boot-delay', {
     type: 'string',
-    describe: 'Staggered boot delay in milliseconds so public RPC nodes do not rate limit serum-vial',
+    describe: 'Staggered boot delay in milliseconds so public RPC nodes do not rate limit aqua-vial',
     default: 500
   })
 
@@ -68,7 +68,7 @@ const argv = yargs
   .version()
   .usage('$0 [options]')
   .example(`$0 --endpoint ${DEFAULT_NODE_ENDPOINT}`)
-  .epilogue('See https://github.com/tardis-dev/serum-vial for more information.')
+  .epilogue('See https://github.com/atellix/aqua-vial for more information.')
   .detectLocale(false).argv
 
 // if port ENV is defined use it otherwise use provided options
@@ -99,7 +99,7 @@ async function start() {
     bootDelay: argv['boot-delay']
   }
 
-  logger.log('info', 'Starting serum-vial server with options', options)
+  logger.log('info', 'Starting aqua-vial server with options', options)
 
   const startTimestamp = new Date().valueOf()
   await bootServer({
@@ -110,12 +110,12 @@ async function start() {
   const bootTimeSeconds = Math.ceil((new Date().valueOf() - startTimestamp) / 1000)
 
   if (isDocker()) {
-    logger.log('info', `Serum-vial v${pkg.version} is running inside Docker container.`, { bootTimeSeconds })
+    logger.log('info', `Aqua-vial v${pkg.version} is running inside Docker container.`, { bootTimeSeconds })
   } else {
-    logger.log('info', `Serum-vial server v${pkg.version} is running on port ${port}.`, { bootTimeSeconds })
+    logger.log('info', `Aqua-vial server v${pkg.version} is running on port ${port}.`, { bootTimeSeconds })
   }
 
-  logger.log('info', `See https://github.com/tardis-dev/serum-vial for more information.`)
+  logger.log('info', `See https://github.com/atellix/aqua-vial for more information.`)
 }
 
 start()

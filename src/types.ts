@@ -128,9 +128,14 @@ export type SerumListMarketItem = {
   deprecated: boolean
 }
 
-export type SerumMarket = {
+export type AquaMarket = {
   address: string
   name: string
   programId: string
   deprecated: boolean
 }
+
+export type AquaMarketAccounts = {
+  tradeLog: string
+}
+

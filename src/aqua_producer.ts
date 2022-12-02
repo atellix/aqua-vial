@@ -98,7 +98,7 @@ export type MessageEnvelope = {
     type: MessageType
     market: string
     publish: boolean
-    payload: string
+    payload: any
     timestamp: string
 }
 

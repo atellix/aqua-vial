@@ -2,11 +2,12 @@ import { Buffer } from 'buffer'
 import { PublicKey } from '@solana/web3.js'
 import { Layout, Sequence, struct, nu64, ns64, seq, u16, u8, blob } from '@solana/buffer-layout'
 import BN from 'bn.js'
-import { base32Encode } from '@ctrl/ts-base32'
 import { logger } from './logger'
 import { AccountsNotificationPayload } from './rpc_client'
 import { MessageEnvelope } from './aqua_producer'
-import { AquaMarket, AquaMarketAccounts } from './types'
+import { AquaMarket, AquaMarketAccounts, Trade, DataMessage } from './types'
+
+const base32 = require('base32.js')
 
 // Input
 interface LogEntry {
@@ -22,23 +23,6 @@ interface LogEntry {
     price: number,
     ts: number,
 }
-
-// Output
-interface LogItem {
-    event_type: string,
-    action_id: number,
-    trade_id: number,
-    maker_order_id: string,
-    maker_filled: number,
-    maker: string,
-    taker: string,
-    taker_side: number,
-    amount: number,
-    price: number,
-    ts: number,
-}
-
-
 
 interface LogSlabVec {
     offset: any,
@@ -67,7 +51,7 @@ interface SlabAlloc {
 interface LogSpec {
     trade_count: number,
     entry_max: number,
-    logs: LogItem[],
+    logs: Trade[],
 }
 
 // DataMapper maps tradeLog accounts data to normalized messages
@@ -81,14 +65,16 @@ export class DataMapper {
         }
     ) { }
 
-    public *map({ accountsData }: AccountsNotificationPayload): IterableIterator<MessageEnvelope> {
+    public *map({ accountsData, slot }: AccountsNotificationPayload): IterableIterator<MessageEnvelope> {
         // the same timestamp for all messages received in single notification
         const timestamp = new Date().toISOString()
         if (accountsData.tradeLog) {
-            const tradeLog = JSON.stringify(this._decodeTradeLog(accountsData.tradeLog))
-            logger.log('info', `${tradeLog}`)
+            const tradeLog = this._decodeTradeLog(accountsData.tradeLog, slot, this._options.market.address)
+            // TODO: check for only new trades
+            for (const trade of tradeLog.logs) {
+                yield this._putInEnvelope(trade, false)
+            }
         }
-        //// yield this._putInEnvelope(recentTradesMessage, false)
     }
 
     private _encodeOrderId(orderIdBuf: any) {
@@ -99,11 +85,12 @@ export class DataMapper {
             zflist = zfprefix.concat(zflist)
         }
         zflist.reverse()
-        var res = base32Encode(new Uint8Array(zflist), 'Crockford').toLowerCase()
+        var encoder = new base32.Encoder({ type: "crockford", lc: true })
+        var res = encoder.write(new Uint8Array(zflist)).finalize()
         return res
     }
 
-    private _decodeTradeLog(data: Buffer) {
+    private _decodeTradeLog(data: Buffer, slot: number, market: string) {
         const stTypedPageItem = struct<TypedPageItem>([
             u16('page_index')
         ])
@@ -121,12 +108,17 @@ export class DataMapper {
         var res = stSlabAlloc.decode(data)
         var logVec = res['type_page'][0]
         if (logVec) {
-            return this._decodeTradeLogVec(logVec, res['pages'])
+            return this._decodeTradeLogVec(logVec, res['pages'], slot, market)
+        } else {
+            return {
+                trade_count: 0,
+                entry_max: 0,
+                logs: [],
+            }
         }
-        return []
     }
 
-    private _decodeTradeLogVec(pageTableEntry: TypedPage, pages: any) {
+    private _decodeTradeLogVec(pageTableEntry: TypedPage, pages: any, slot: number, market: string) {
         const headerSize = pageTableEntry['header_size']
         const offsetSize = pageTableEntry['offset_size']
         const stLogEntry = struct<LogEntry>([
@@ -177,7 +169,12 @@ export class DataMapper {
                     if (item['trade_id'] === 0) {
                         continue
                     }
-                    var logItem: LogItem = {
+                    var trade: Trade = {
+                        type: 'trade',
+                        timestamp: item['ts'].toString(),
+                        market: market,
+                        version: 1,
+                        slot: slot,
                         event_type: (new BN(item['event_type'])).toString(),
                         action_id: item['action_id'],
                         trade_id: item['trade_id'],
@@ -188,9 +185,8 @@ export class DataMapper {
                         taker_side: item['taker_side'],
                         amount: item['amount'],
                         price: item['price'],
-                        ts: item['ts'],
                     }
-                    logSpec['logs'].push(logItem)
+                    logSpec['logs'].push(trade)
                     if (logSpec['logs'].length === pageTableEntry['alloc_items']) {
                         i = vecPages.length
                         break
@@ -198,8 +194,19 @@ export class DataMapper {
                 }
             }
         }
-        logSpec.logs = logSpec.logs.sort((a, b) => { return b.trade_id - a.trade_id })
+        logSpec.logs = logSpec.logs.sort((a, b) => { return a.trade_id - b.trade_id })
         return logSpec
+    }
+
+    private _putInEnvelope(message: DataMessage, publish: boolean) {
+        const envelope: MessageEnvelope = {
+            type: message.type,
+            market: message.market,
+            publish,
+            payload: message,
+            timestamp: message.timestamp
+        }
+        return envelope
     }
 }
 

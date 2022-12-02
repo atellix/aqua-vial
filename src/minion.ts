@@ -9,14 +9,16 @@ import {
     executeAndRetry,
     getAllowedValuesText,
     getDidYouMean,
+    marketInitChannel,
     minionReadyChannel,
     aquaDataChannel,
     aquaMarketsChannel,
+    aquaStatusChannel,
     wait
 } from './helpers'
 import { logger } from './logger'
 import { MessageEnvelope } from './aqua_producer'
-import { ErrorResponse, RecentTrades, SerumListMarketItem, AquaMarket, SubRequest, SuccessResponse } from './types'
+import { ErrorResponse, RecentTrades, SerumListMarketItem, AquaMarket, AquaMarketStatus, SubRequest, SuccessResponse, AquaMarketUpdateLastId } from './types'
 
 const meta = {
     minionId: threadId
@@ -72,26 +74,29 @@ class Minion {
     private readonly _recentTradesSerialized: { [market: string]: string } = {}
     private readonly _quotesSerialized: { [market: string]: string } = {}
     private readonly _marketNames: string[]
-    private _lastTradeIds: { [market: string]: number } = {}
     private _listenSocket: any | undefined = undefined
     private _openConnectionsCount = 0
     private _tid: NodeJS.Timeout | undefined = undefined
 
+    status: AquaMarketStatus
+
     private MAX_BACKPRESSURE = 3 * 1024 * 1024
-    constructor(private readonly _nodeEndpoint: string, private readonly _markets: AquaMarket[]) {
+    constructor(private readonly _nodeEndpoint: string, private readonly _markets: AquaMarket[], marketStatus: AquaMarketStatus) {
+        this.status = marketStatus
         this._marketNames = _markets.map((m) => m.name)
         this._server = this._initServer()
         this._sqlClient = new Client({
-            host: '173.234.24.76',
-            port: 5432,
-            user: 'postgres',
-            database: 'markets',
-            password: '8ppgqha6ntzr5idpbryw',
+            host: process.env.POSTGRES_HOST,
+            port: parseInt(process.env.POSTGRES_PORT as string),
+            user: process.env.POSTGRES_USER,
+            database: process.env.POSTGRES_DATABASE,
+            password: process.env.POSTGRES_PASSWORD,
         })
 
         this._tid = setInterval(() => {
             logger.log('debug', `Open WS client connections count: ${this._openConnectionsCount}`, meta)
         }, 60 * 1000)
+
     }
 
     private _initServer() {
@@ -158,14 +163,20 @@ class Minion {
 
     public async initMarkets() {
         await this._markets.map(async (m) => {
-            const mxrs = await this._sqlClient.query('select max(trade_id) as ct from market_z48yrezw6k4gqnxhaseacjjywz1dsm0q0hd1wydx70c636c9jbng')
+            const mxrs = await this._sqlClient.query('SELECT MAX(trade_id) AS ct FROM market_z48yrezw6k4gqnxhaseacjjywz1dsm0q0hd1wydx70c636c9jbng')
             const mx = mxrs.rows[0]?.[0]
-            logger.log('info', `Last trade_id for ${m.address}: ${mx}`)
-            if (!mx) {
-                this._lastTradeIds[m.address] = 0
-            } else {
-                this._lastTradeIds[m.address] = mx as number
+            logger.log('debug', `Set last trade id for market ${m.address}: ${mx}`)
+            var lastId: number = 0
+            if (mx) {
+                lastId = mx as number
             }
+            this.status.lastTradeIds[m.address] = lastId
+            const lastTradeId: AquaMarketUpdateLastId = {
+                type: 'lastId',
+                market: m.address,
+                lastId: lastId,
+            }
+            aquaStatusChannel.postMessage(lastTradeId)
         })
     }
 
@@ -239,7 +250,7 @@ class Minion {
                 logger.log('debug', `Processing message, topic: ${topic}, receive delay: ${diff}ms, data: ${data}`, meta)
             }
             if (message.type === 'trade') {
-                if (message.payload.trade_id > (this._lastTradeIds[message.market] as number)) {
+                if (message.payload.trade_id > (this.status.lastTradeIds[message.market] as number)) {
                     logger.log('debug', `New trade found... ${message.market}:${message.payload.trade_id}`)
                     const dt = new Date(message.payload.timestamp * 1000)
                     const marketTable = 'market_z48yrezw6k4gqnxhaseacjjywz1dsm0q0hd1wydx70c636c9jbng'
@@ -486,14 +497,15 @@ class Minion {
     }
 }
 
-const { port, nodeEndpoint, markets, minionNumber } = workerData as {
+const { port, nodeEndpoint, markets, minionNumber, marketStatus } = workerData as {
     port: number
     nodeEndpoint: string
     markets: AquaMarket[]
     minionNumber: number
+    marketStatus: AquaMarketStatus
 }
 
-const minion = new Minion(nodeEndpoint, markets)
+const minion = new Minion(nodeEndpoint, markets, marketStatus)
 
 let lastPublishTimestamp = new Date()
 
@@ -511,7 +523,6 @@ if (minionNumber === 0) {
 
 minion.start(port).then(async () => {
     await minion.sqlConnect()
-    await minion.initMarkets()
 
     aquaDataChannel.onmessage = (message) => {
         lastPublishTimestamp = new Date()
@@ -521,6 +532,10 @@ minion.start(port).then(async () => {
 
     aquaMarketsChannel.onmessage = (message) => {
         minion.initMarketsCache(message.data)
+    }
+
+    marketInitChannel.onmessage = async () => {
+        await minion.initMarkets()
     }
 
     minionReadyChannel.postMessage('ready')

@@ -1,9 +1,9 @@
 import os from 'os'
 import path from 'path'
 import { Worker } from 'worker_threads'
-import { cleanupChannel, minionReadyChannel, aquaProducerReadyChannel, wait } from './helpers'
+import { cleanupChannel, minionReadyChannel, aquaProducerReadyChannel, marketInitChannel, wait } from './helpers'
 import { logger } from './logger'
-import { AquaMarket } from './types'
+import { AquaMarket, AquaMarketStatus } from './types'
 
 export async function bootServer({
     port,
@@ -18,6 +18,9 @@ export async function bootServer({
     // see https://github.com/uNetworking/uWebSockets.js/issues/304 and https://lwn.net/Articles/542629/
     const MINIONS_COUNT = os.platform() === 'linux' ? minionsCount : 1
     let readyMinionsCount = 0
+    let marketStatus: AquaMarketStatus = {
+        lastTradeIds: {}
+    }
 
     logger.log(
         'info',
@@ -29,7 +32,7 @@ export async function bootServer({
 
     for (let i = 0; i < MINIONS_COUNT; i++) {
         const minionWorker = new Worker(path.resolve(__dirname, 'minion.js'), {
-            workerData: { nodeEndpoint, port, markets, minionNumber: i }
+            workerData: { nodeEndpoint, port, markets, minionNumber: i, marketStatus }
         })
 
         minionWorker.on('error', (err) => {
@@ -89,6 +92,8 @@ export async function bootServer({
 
         resolve()
     })
+
+    marketInitChannel.postMessage('ready')
 }
 
 export async function stopServer() {

@@ -137,3 +137,16 @@ export type AquaMarketAccounts = {
     tradeLog: string
 }
 
+export type AquaMarketStatus = {
+    lastTradeIds: { [market: string]: number }
+}
+
+export interface AquaMarketUpdate {
+    readonly type: 'lastId'
+    readonly market: string
+}
+
+export interface AquaMarketUpdateLastId extends AquaMarketUpdate {
+    readonly lastId: number
+}
+

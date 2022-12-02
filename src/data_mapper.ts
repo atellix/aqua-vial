@@ -5,7 +5,8 @@ import BN from 'bn.js'
 import { logger } from './logger'
 import { AccountsNotificationPayload } from './rpc_client'
 import { MessageEnvelope } from './aqua_producer'
-import { AquaMarket, AquaMarketAccounts, Trade, DataMessage } from './types'
+import { aquaStatusChannel } from './helpers'
+import { AquaMarket, AquaMarketAccounts, AquaMarketStatus, Trade, DataMessage, AquaMarketUpdateLastId } from './types'
 
 const base32 = require('base32.js')
 
@@ -57,22 +58,36 @@ interface LogSpec {
 // DataMapper maps tradeLog accounts data to normalized messages
 export class DataMapper {
     private _initialized = false
+    status: AquaMarketStatus
 
     constructor(
         private readonly _options: {
             readonly market: AquaMarket
             readonly accounts: AquaMarketAccounts
+        },
+        marketStatus: AquaMarketStatus
+    ) {
+        this.status = marketStatus
+        aquaStatusChannel.onmessage = (message) => {
+            const msg: AquaMarketUpdateLastId = message.data as unknown as AquaMarketUpdateLastId
+            this.status.lastTradeIds[msg.market] = msg.lastId
+            logger.log('debug', `Status channel message: ${msg.market} ${msg.lastId}`)
         }
-    ) { }
+        logger.log('debug', `Listening to status channel`)
+    }
 
     public *map({ accountsData, slot }: AccountsNotificationPayload): IterableIterator<MessageEnvelope> {
         // the same timestamp for all messages received in single notification
         const timestamp = new Date().toISOString()
         if (accountsData.tradeLog) {
             const tradeLog = this._decodeTradeLog(accountsData.tradeLog, slot, this._options.market.address)
+            const lastId = this.status.lastTradeIds[this._options.market.address]
+            logger.log('debug', `Last trade id for market ${this._options.market.address}: ${lastId}`)
             // TODO: check for only new trades
             for (const trade of tradeLog.logs) {
-                yield this._putInEnvelope(trade, false)
+                if (trade.trade_id > (lastId ?? 0)) {
+                    yield this._putInEnvelope(trade, false)
+                }
             }
         }
     }

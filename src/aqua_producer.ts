@@ -2,10 +2,10 @@ import { PublicKey } from '@solana/web3.js'
 import { isMainThread, workerData } from 'worker_threads'
 import { MessageType } from './consts'
 import { DataMapper } from './data_mapper'
-import { decimalPlaces, aquaDataChannel, aquaProducerReadyChannel } from './helpers'
+import { decimalPlaces, aquaDataChannel, aquaProducerReadyChannel, aquaStatusChannel, marketInitChannel } from './helpers'
 import { logger } from './logger'
 import { RPCClient } from './rpc_client'
-import { AquaMarket, AquaMarketAccounts } from './types'
+import { AquaMarket, AquaMarketAccounts, AquaMarketStatus } from './types'
 
 if (isMainThread) {
     const message = 'Exiting. Worker is not meant to run in main thread'
@@ -23,6 +23,8 @@ process.on('unhandledRejection', (err) => {
 // - map received data to normalized data messages and broadcast those
 
 export class AquaProducer {
+    status: AquaMarketStatus
+
     constructor(
         private readonly _options: {
             nodeEndpoint: string
@@ -30,7 +32,11 @@ export class AquaProducer {
             market: AquaMarket
             commitment: string
         }
-    ) {}
+    ) {
+        this.status = {
+            lastTradeIds: {}
+        }
+    }
 
     public async run(onData: OnDataCallback) {
         let started = false
@@ -51,7 +57,7 @@ export class AquaProducer {
         const dataMapper = new DataMapper({
             market: this._options.market,
             accounts
-        })
+        }, this.status)
 
         let start = process.hrtime()
         const interval = 600
@@ -72,17 +78,19 @@ export class AquaProducer {
             start = process.hrtime()
         }, interval).unref()
 
-        for await (const notification of rpcClient.streamAccountsNotification(accounts, this._options.market.name)) {
-            if (started === false) {
-                logger.log('info', `Aqua producer started for ${this._options.market.name} market...`)
-                started = true
-                aquaProducerReadyChannel.postMessage('ready')
-            }
+        if (started === false) {
+            logger.log('info', `Aqua producer started for ${this._options.market.name} market...`)
+            started = true
+            aquaProducerReadyChannel.postMessage('ready')
+        }
 
-            const messagesForSlot = [...dataMapper.map(notification)]
+        marketInitChannel.onmessage = async () => {
+            for await (const notification of rpcClient.streamAccountsNotification(accounts, this._options.market.name)) {
+                const messagesForSlot = [...dataMapper.map(notification)]
 
-            if (messagesForSlot.length > 0) {
-                onData(messagesForSlot)
+                if (messagesForSlot.length > 0) {
+                    onData(messagesForSlot)
+                }
             }
         }
     }

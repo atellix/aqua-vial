@@ -6,150 +6,152 @@ import { AquaMarket } from './types'
 export const wait = (delayMS: number) => new Promise((resolve) => setTimeout(resolve, delayMS))
 
 export function getDidYouMean(input: string, allowedValues: readonly string[]) {
-  let tip = ''
+    let tip = ''
 
-  if (typeof input === 'string') {
-    let result = didYouMean(input, allowedValues, {})
-    if (result !== null) {
-      tip = ` Did you mean '${result}'?`
+    if (typeof input === 'string') {
+        let result = didYouMean(input, allowedValues, {})
+        if (result !== null) {
+            tip = ` Did you mean '${result}'?`
+        }
     }
-  }
-  return tip
+    return tip
 }
 
 export function getAllowedValuesText(allowedValues: readonly string[]) {
-  return `Allowed values: ${allowedValues.map((val) => `'${val}'`).join(', ')}.`
+    return `Allowed values: ${allowedValues.map((val) => `'${val}'`).join(', ')}.`
 }
 
 export function* batch<T>(items: T[], batchSize: number) {
-  for (let i = 0; i < items.length; i += batchSize) {
-    yield items.slice(i, i + batchSize)
-  }
+    for (let i = 0; i < items.length; i += batchSize) {
+        yield items.slice(i, i + batchSize)
+    }
 }
 
 // https://stackoverflow.com/questions/9539513/is-there-a-reliable-way-in-javascript-to-obtain-the-number-of-decimal-places-of?noredirect=1&lq=1
 
 export function decimalPlaces(n: number) {
-  // Make sure it is a number and use the builtin number -> string.
-  var s = '' + +n
-  // Pull out the fraction and the exponent.
-  var match = /(?:\.(\d+))?(?:[eE]([+\-]?\d+))?$/.exec(s)
-  // NaN or Infinity or integer.
-  // We arbitrarily decide that Infinity is integral.
-  if (!match) {
-    return 0
-  }
-  // Count the number of digits in the fraction and subtract the
-  // exponent to simulate moving the decimal point left by exponent places.
-  // 1.234e+2 has 1 fraction digit and '234'.length -  2 == 1
-  // 1.234e-2 has 5 fraction digit and '234'.length - -2 == 5
+    // Make sure it is a number and use the builtin number -> string.
+    var s = '' + +n
+    // Pull out the fraction and the exponent.
+    var match = /(?:\.(\d+))?(?:[eE]([+\-]?\d+))?$/.exec(s)
+    // NaN or Infinity or integer.
+    // We arbitrarily decide that Infinity is integral.
+    if (!match) {
+        return 0
+    }
+    // Count the number of digits in the fraction and subtract the
+    // exponent to simulate moving the decimal point left by exponent places.
+    // 1.234e+2 has 1 fraction digit and '234'.length -    2 == 1
+    // 1.234e-2 has 5 fraction digit and '234'.length - -2 == 5
 
-  return Math.max(
-    0, // lower limit.
-    (match[1] == '0' ? 0 : (match[1] || '').length) - // fraction length
-      (+match[2]! || 0)
-  ) // exponent
+    return Math.max(
+        0, // lower limit.
+        (match[1] == '0' ? 0 : (match[1] || '').length) - // fraction length
+            (+match[2]! || 0)
+    ) // exponent
 }
 
 export class CircularBuffer<T> {
-  private _buffer: T[] = []
-  private _index: number = 0
-  constructor(private readonly _bufferSize: number) {}
+    private _buffer: T[] = []
+    private _index: number = 0
+    constructor(private readonly _bufferSize: number) {}
 
-  append(value: T) {
-    const isFull = this._buffer.length === this._bufferSize
-    let poppedValue
-    if (isFull) {
-      poppedValue = this._buffer[this._index]
+    append(value: T) {
+        const isFull = this._buffer.length === this._bufferSize
+        let poppedValue
+        if (isFull) {
+            poppedValue = this._buffer[this._index]
+        }
+        this._buffer[this._index] = value
+        this._index = (this._index + 1) % this._bufferSize
+
+        return poppedValue
     }
-    this._buffer[this._index] = value
-    this._index = (this._index + 1) % this._bufferSize
 
-    return poppedValue
-  }
-
-  *items() {
-    for (let i = 0; i < this._buffer.length; i++) {
-      const index = (this._index + i) % this._buffer.length
-      yield this._buffer[index]!
+    *items() {
+        for (let i = 0; i < this._buffer.length; i++) {
+            const index = (this._index + i) % this._buffer.length
+            yield this._buffer[index]!
+        }
     }
-  }
 
-  get count() {
-    return this._buffer.length
-  }
+    get count() {
+        return this._buffer.length
+    }
 
-  clear() {
-    this._buffer = []
-    this._index = 0
-  }
+    clear() {
+        this._buffer = []
+        this._index = 0
+    }
 }
 
 const { BroadcastChannel } = require('worker_threads')
 
 export const minionReadyChannel = new BroadcastChannel('MinionReady') as BroadcastChannel
-export const aquaProducerReadyChannel = new BroadcastChannel('SerumProducerReady') as BroadcastChannel
-export const aquaDataChannel = new BroadcastChannel('SerumData') as BroadcastChannel
+export const aquaProducerReadyChannel = new BroadcastChannel('AquaProducerReady') as BroadcastChannel
+export const marketInitChannel = new BroadcastChannel('MarketInit') as BroadcastChannel
+export const aquaDataChannel = new BroadcastChannel('AquaData') as BroadcastChannel
 export const aquaMarketsChannel = new BroadcastChannel('AquaMarkets') as BroadcastChannel
+export const aquaStatusChannel = new BroadcastChannel('AquaStatus') as BroadcastChannel
 export const cleanupChannel = new BroadcastChannel('Cleanup') as BroadcastChannel
 
 export async function executeAndRetry<T>(
-  operation: (attempt: number) => Promise<T>,
-  { maxRetries }: { maxRetries: number }
+    operation: (attempt: number) => Promise<T>,
+    { maxRetries }: { maxRetries: number }
 ): Promise<T> {
-  let attempts = 0
-  while (true) {
-    attempts++
-    try {
-      return await operation(attempts)
-    } catch (err) {
-      if (attempts > maxRetries) {
-        throw err
-      }
+    let attempts = 0
+    while (true) {
+        attempts++
+        try {
+            return await operation(attempts)
+        } catch (err) {
+            if (attempts > maxRetries) {
+                throw err
+            }
 
-      await wait(500 * attempts * attempts)
+            await wait(500 * attempts * attempts)
+        }
     }
-  }
 }
 
 export function getMangoSpotMarkets(): AquaMarket[] {
-  const mangoGroupConfig = Config.ids().groups.filter((group) => group.name === 'mainnet.1')[0]!
+    const mangoGroupConfig = Config.ids().groups.filter((group) => group.name === 'mainnet.1')[0]!
 
-  return mangoGroupConfig.spotMarkets.map((market) => {
-    return {
-      name: market.name,
-      address: market.publicKey.toBase58(),
-      programId: mangoGroupConfig.serumProgramId.toBase58(),
-      deprecated: false
-    }
-  })
+    return mangoGroupConfig.spotMarkets.map((market) => {
+        return {
+            name: market.name,
+            address: market.publicKey.toBase58(),
+            programId: mangoGroupConfig.serumProgramId.toBase58(),
+            deprecated: false
+        }
+    })
 }
 export function getDefaultMarkets(): AquaMarket[] {
-  const defaultMarkets: AquaMarket[] = []
+    const defaultMarkets: AquaMarket[] = []
 
-  for (const market of DEFAULT_SERUM_MARKETS) {
-    if (market.deprecated) {
-      continue
+    for (const market of DEFAULT_SERUM_MARKETS) {
+        if (market.deprecated) {
+            continue
+        }
+
+        if (defaultMarkets.some((s) => s.name === market.name)) {
+            continue
+        }
+
+        defaultMarkets.push({
+            name: market.name,
+            address: market.address.toBase58(),
+            programId: market.programId.toBase58(),
+            deprecated: false
+        })
+    }
+    for (const mangoSpotMarket of getMangoSpotMarkets()) {
+        if (defaultMarkets.some((s) => s.name === mangoSpotMarket.name)) {
+            continue
+        }
+
+        defaultMarkets.push(mangoSpotMarket)
     }
 
-    if (defaultMarkets.some((s) => s.name === market.name)) {
-      continue
-    }
-
-    defaultMarkets.push({
-      name: market.name,
-      address: market.address.toBase58(),
-      programId: market.programId.toBase58(),
-      deprecated: false
-    })
-  }
-  for (const mangoSpotMarket of getMangoSpotMarkets()) {
-    if (defaultMarkets.some((s) => s.name === mangoSpotMarket.name)) {
-      continue
-    }
-
-    defaultMarkets.push(mangoSpotMarket)
-  }
-
-  return defaultMarkets
+    return defaultMarkets
 }

@@ -1,7 +1,7 @@
 import { getLayoutVersion, Market } from '@project-serum/serum'
 import { Connection, PublicKey } from '@solana/web3.js'
 import { Client, DataType } from 'ts-postgres'
-import { App, HttpResponse, DISABLED, SSLApp, TemplatedApp, us_listen_socket_close, WebSocket } from 'uWebSockets.js'
+import { App, HttpRequest, HttpResponse, DISABLED, SSLApp, TemplatedApp, us_listen_socket_close, WebSocket } from 'uWebSockets.js'
 import { isMainThread, threadId, workerData } from 'worker_threads'
 import { CHANNELS, MESSAGE_TYPES_PER_CHANNEL, OPS } from './consts'
 import {
@@ -110,7 +110,8 @@ class Minion {
                 }
             : {}
         return WsApp(options)
-            .ws(`${apiPrefix}/ws`, {
+            // Websocket disabled
+            /*.ws(`${apiPrefix}/ws`, {
                 compression: DISABLED,
                 maxPayloadLength: 256 * 1024,
                 idleTimeout: 60, // closes WS connection if no message/ping send/received in 1 minute
@@ -125,14 +126,19 @@ class Minion {
                 close: () => {
                     this._openConnectionsCount--
                 }
-            } as any)
+            } as any)*/
 
-            .get(`${apiPrefix}/markets`, this._listMarkets)
+            //.get(`${apiPrefix}/markets`, this._listMarkets) // TODO
+            .post(`${apiPrefix}/history`, this._getMarketHistory)
+            .options(`${apiPrefix}/history`, (res) => {
+                this._setCorsHeaders(res)
+                res.end()
+            })
     }
 
     public async start(port: number) {
         return new Promise<void>((resolve, reject) => {
-            this._server.listen(port, (socket) => {
+            this._server.listen(process.env.MINION_HOST as string, port, (socket) => {
                 if (socket) {
                     this._listenSocket = socket
                     logger.log('info', `Listening on port ${port}`, meta)
@@ -178,6 +184,63 @@ class Minion {
             }
             aquaStatusChannel.postMessage(lastTradeId)
         })
+    }
+
+    private _setCorsHeaders(res: HttpResponse) {
+        res.writeHeader("Access-Control-Allow-Origin", "*")
+        res.writeHeader("Access-Control-Allow-Methods", "OPTIONS, POST")
+        res.writeHeader("Access-Control-Allow-Headers", "origin, content-type, content-length, accept, host, user-agent")
+        res.writeHeader("Access-Control-Max-Age", "3600")
+    }
+
+    private _getMarketHistory = async (res: HttpResponse, req: HttpRequest) => {
+        res.onAborted(() => {
+            res.aborted = true
+        })
+        logger.log('debug', `Get Market History: ${req}`)
+        //const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
+        //const todayEnd = new Date(new Date().setHours(23, 59, 59, 999))
+        const monthStart = new Date(new Date(new Date().getFullYear(), new Date().getMonth(), 1).setHours(0, 0, 0, 0))
+        const monthEnd = new Date(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).setHours(23, 59, 59, 999))
+        var historyQuery
+        try {
+            historyQuery = await this._sqlClient.query(
+                "SELECT bucket, open, high, low, close FROM cs1min_z48yrezw6k4gqnxhaseacjjywz1dsm0q0hd1wydx70c636c9jbng WHERE bucket >= $1 AND bucket <= $2 ORDER BY bucket DESC",
+                [
+                    monthStart,
+                    monthEnd,
+                ], [
+                    DataType.Timestamptz,
+                    DataType.Timestamptz,
+                ]
+            )
+        } catch (error) {
+            logger.log('error', error)
+        }
+        let rq = []
+        if (historyQuery) {
+            for await (const r of historyQuery.rows) {
+                rq.push({
+                    x: r[0],
+                    y: [
+                        r[1]?.toString(),
+                        r[2]?.toString(),
+                        r[3]?.toString(),
+                        r[4]?.toString(),
+                    ]
+                })
+            }
+        }
+        if (!res.aborted) {
+            res.writeStatus('200 OK')
+            res.writeHeader('Content-Type', 'application/json')
+            this._setCorsHeaders(res)
+            res.end(JSON.stringify({
+                'result': 'ok',
+                'history': rq,
+            }))
+            logger.log('debug', `Sending reply...`)
+        }
     }
 
     private _cachedListMarketsResponse: string | undefined = undefined
@@ -257,14 +320,14 @@ class Minion {
                     const insert = async () => {
                         try {
                             await this._sqlClient.query(
-                                "INSERT INTO " + marketTable + "(trade_id, action_id, maker_order_id, maker_filled, maker_id, taker_id, taker_side, ts, quantity, price, slot) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+                                "INSERT INTO " + marketTable + "(trade_id, action_id, maker_order_id, maker_filled, maker_id, taker_id, taker_side, ts, quantity, price, slot) VALUES ($1, $2, $3, $4, solana_account_id($5), solana_account_id($6), $7, $8, $9, $10, $11)",
                                 [
                                     message.payload.trade_id,
                                     message.payload.action_id,
                                     message.payload.maker_order_id,
                                     (message.payload.maker_filled === 1) ? true : false,
-                                    0,
-                                    0,
+                                    message.payload.maker,
+                                    message.payload.taker,
                                     (message.payload.taker_side === 1) ? true : false,
                                     dt,
                                     message.payload.amount,
@@ -275,8 +338,8 @@ class Minion {
                                     DataType.Int8,
                                     DataType.Varchar,
                                     DataType.Bool,
-                                    DataType.Int8,
-                                    DataType.Int8,
+                                    DataType.Varchar,
+                                    DataType.Varchar,
                                     DataType.Bool,
                                     DataType.Timestamptz,
                                     DataType.Int8,

@@ -86,6 +86,7 @@ export class DataMapper {
             // TODO: check for only new trades
             for (const trade of tradeLog.logs) {
                 if (trade.trade_id > (lastId ?? 0)) {
+                    this.status.lastTradeIds[this._options.market.address] = trade.trade_id
                     yield this._putInEnvelope(trade, false)
                 }
             }

@@ -201,10 +201,38 @@ quantity BIGINT NOT NULL,
 price BIGINT NOT NULL);`
         const tableTradesIndex = `CREATE UNIQUE INDEX ${baseName}_ix1 ON ${baseName}_trades(trade_id, ts);`
         const tableTradesHT = `SELECT * FROM create_hypertable('${baseName}_trades', 'ts');`
-        const view1minCandles = `CREATE MATERIALIZED VIEW ${baseName}_v1min
+        const intervals = [ // table_postfix, bucket, start_offset, end_offset, schedule_interval
+            ['v1m', '1 min', '2 hour', '10 sec', '2 min'],
+            ['v3m', '3 min', '2 hour', '10 sec', '6 min'],
+            ['v5m', '5 min', '2 hour', '10 sec', '10 min'],
+            ['v15m', '15 min', '2 hour', '10 sec', '30 min'],
+            ['v30m', '30 min', '2 hour', '10 sec', '1 hour'],
+            ['v1h', '60 min', '3 hour', '10 sec', '2 hour'],
+            ['v2h', '120 min', '6 hour', '10 sec', '4 hour'],
+            ['v4h', '240 min', '12 hour', '10 sec', '8 hour'],
+            ['v6h', '360 min', '18 hour', '10 sec', '12 hour'],
+            ['v8h', '480 min', '24 hour', '10 sec', '16 hour'],
+            ['v12h', '720 min', '36 hour', '10 sec', '24 hour'],
+            ['v1d', '1 day', '72 hour', '10 sec', '48 hour'],
+            ['v7d', '7 day', '21 day', '10 sec', '14 day'],
+            ['v30d', '30 day', '90 day', '10 sec', '60 day'],
+        ]
+        if (! await this.tableExists(baseName + '_trades')) {
+            logger.log('debug', `Create market tables for: ${m.name} (${m.address})`)
+            await this._sqlClient.query(tableTrades)
+            await this._sqlClient.query(tableTradesIndex)
+            await this._sqlClient.query(tableTradesHT)
+            for (var j = 0; j < intervals.length; j++) {
+                const i = intervals[j]
+                const tablePostfix = i?.[0]
+                const bucket = i?.[1]
+                const startOffset = i?.[2]
+                const endOffset = i?.[3]
+                const schedInterval = i?.[4]
+                const viewCandles = `CREATE MATERIALIZED VIEW ${baseName}_${tablePostfix}
 WITH (timescaledb.continuous) AS
 SELECT
-    time_bucket('1 min', ts) AS bucket,
+    time_bucket('${bucket}', ts) AS bucket,
     FIRST(price, trade_id) AS "open",
     MAX(price) AS high,
     MIN(price) AS low,
@@ -213,17 +241,14 @@ SELECT
 FROM ${baseName}_trades
 GROUP BY bucket
 ORDER BY bucket DESC;`
-        const view1minCandlesRefresh = `SELECT add_continuous_aggregate_policy('${baseName}_v1min',
-start_offset => INTERVAL '2 hour',
-end_offset => INTERVAL '10 sec',
-schedule_interval => INTERVAL '2 min');`
-        if (! await this.tableExists(baseName + '_trades')) {
-            logger.log('debug', `Create market tables for: ${m.name} (${m.address})`)
-            await this._sqlClient.query(tableTrades)
-            await this._sqlClient.query(tableTradesIndex)
-            await this._sqlClient.query(tableTradesHT)
-            await this._sqlClient.query(view1minCandles)
-            await this._sqlClient.query(view1minCandlesRefresh)
+                const viewCandlesRefresh = `SELECT add_continuous_aggregate_policy('${baseName}_${tablePostfix}',
+start_offset => INTERVAL '${startOffset}',
+end_offset => INTERVAL '${endOffset}',
+schedule_interval => INTERVAL '${schedInterval}');`
+                await this._sqlClient.query(viewCandles)
+                await this._sqlClient.query(viewCandlesRefresh)
+                logger.log('debug', `Create view for: ${baseName}_${tablePostfix})`)
+            }
         }
     }
 
@@ -313,7 +338,7 @@ schedule_interval => INTERVAL '2 min');`
             //const todayEnd = new Date(new Date().setHours(23, 59, 59, 999))
             const monthStart = new Date(new Date(new Date().getFullYear(), new Date().getMonth(), 1).setHours(0, 0, 0, 0))
             const monthEnd = new Date(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).setHours(23, 59, 59, 999))
-            const historyTable = this._marketBase32[market] + '_v1min'
+            const historyTable = this._marketBase32[market] + '_v1m'
             var historyQuery
             try {
                 historyQuery = await this._sqlClient.query(

@@ -44,7 +44,7 @@ export class AquaProducer {
 
         // TODO: read this
         const accounts = {
-            tradeLog: 'Czb7W4cRVtGdbMUk19zSh3bEPJg9fPkM56MmuXW6phjU'
+            tradeLog: 'ANMwhka1qLJ6Haz1FnRpU3F7w2mu6tBjxqdw1hFgpYCr'
         }
 
         // don't use Solana web3.js Connection but custom rpcClient so we have more control and insight what is going on

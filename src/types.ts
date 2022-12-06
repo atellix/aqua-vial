@@ -150,3 +150,7 @@ export interface AquaMarketUpdateLastId extends AquaMarketUpdate {
     readonly lastId: number
 }
 
+export type MarketHistoryQuery = {
+    market: string
+}
+

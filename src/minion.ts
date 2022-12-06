@@ -18,7 +18,9 @@ import {
 } from './helpers'
 import { logger } from './logger'
 import { MessageEnvelope } from './aqua_producer'
-import { ErrorResponse, RecentTrades, SerumListMarketItem, AquaMarket, AquaMarketStatus, SubRequest, SuccessResponse, AquaMarketUpdateLastId } from './types'
+import { ErrorResponse, RecentTrades, AquaMarket, AquaMarketStatus, SubRequest, SuccessResponse, AquaMarketUpdateLastId, MarketHistoryQuery } from './types'
+
+const base32 = require('base32.js')
 
 const meta = {
     minionId: threadId
@@ -53,6 +55,9 @@ const RateLimit = (limit: number, interval: number) => {
     }
 }
 
+
+type TPromiseObjectNull = Promise<{ [key: string]: any } | null>
+
 // Minion is the actual HTTP and WS server implementation
 // it is meant to run in Node.js worker_thread and handles:
 // - HTTP requests
@@ -74,6 +79,7 @@ class Minion {
     private readonly _recentTradesSerialized: { [market: string]: string } = {}
     private readonly _quotesSerialized: { [market: string]: string } = {}
     private readonly _marketNames: string[]
+    private _marketBase32: { [market: string]: string } = {}
     private _listenSocket: any | undefined = undefined
     private _openConnectionsCount = 0
     private _tid: NodeJS.Timeout | undefined = undefined
@@ -84,6 +90,11 @@ class Minion {
     constructor(private readonly _nodeEndpoint: string, private readonly _markets: AquaMarket[], marketStatus: AquaMarketStatus) {
         this.status = marketStatus
         this._marketNames = _markets.map((m) => m.name)
+        _markets.forEach((m) => {
+            var pk = new PublicKey(m.address)
+            var encoder = new base32.Encoder({ type: "crockford", lc: true })
+            this._marketBase32[m.address] = 'm' + encoder.write(new Uint8Array(pk.toBuffer().toJSON().data)).finalize()
+        })
         this._server = this._initServer()
         this._sqlClient = new Client({
             host: process.env.POSTGRES_HOST,
@@ -167,9 +178,66 @@ class Minion {
         logger.log('info', `Connected to Postgres/TimescaleDB server`)
     }
 
+    public async tableExists(table: string) {
+        const tableQuery = "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = '" + table + "');"
+        var res = await this._sqlClient.query(tableQuery)
+        var found = res.rows[0]?.[0]
+        return found
+    }
+
+    public async createMarketTables(m: AquaMarket, baseName: string) {
+        logger.log('debug', `Build market tables for: ${m.name} (${m.address})`)
+        const tableTrades = `CREATE TABLE ${baseName}_trades (
+trade_id BIGINT NOT NULL,
+action_id BIGINT NOT NULL,
+match_type CHAR(32),
+maker_order_id CHAR(32),
+maker_filled BOOL,
+maker_id BIGINT NOT NULL,
+taker_id BIGINT NOT NULL,
+taker_side BOOL NOT NULL,
+ts TIMESTAMPTZ NOT NULL,
+quantity BIGINT NOT NULL,
+price BIGINT NOT NULL);`
+        const tableTradesIndex = `CREATE UNIQUE INDEX ${baseName}_ix1 ON ${baseName}_trades(trade_id, ts);`
+        const tableTradesHT = `SELECT * FROM create_hypertable('${baseName}_trades', 'ts');`
+        const view1minCandles = `CREATE MATERIALIZED VIEW ${baseName}_v1min
+WITH (timescaledb.continuous) AS
+SELECT
+    time_bucket('1 min', ts) AS bucket,
+    FIRST(price, trade_id) AS "open",
+    MAX(price) AS high,
+    MIN(price) AS low,
+    LAST(price, trade_id) AS "close",
+    SUM(quantity) AS volume
+FROM ${baseName}_trades
+GROUP BY bucket
+ORDER BY bucket DESC;`
+        const view1minCandlesRefresh = `SELECT add_continuous_aggregate_policy('${baseName}_v1min',
+start_offset => INTERVAL '2 hour',
+end_offset => INTERVAL '10 sec',
+schedule_interval => INTERVAL '2 min');`
+        if (! await this.tableExists(baseName + '_trades')) {
+            logger.log('debug', `Create market tables for: ${m.name} (${m.address})`)
+            await this._sqlClient.query(tableTrades)
+            await this._sqlClient.query(tableTradesIndex)
+            await this._sqlClient.query(tableTradesHT)
+            await this._sqlClient.query(view1minCandles)
+            await this._sqlClient.query(view1minCandlesRefresh)
+        }
+    }
+
+    public async createMarkets() {
+        await this._markets.map(async (m: AquaMarket) => {
+            const baseName = this._marketBase32[m.address]
+            await this.createMarketTables(m, this._marketBase32[m.address] as string)
+        })
+    }
+
     public async initMarkets() {
-        await this._markets.map(async (m) => {
-            const mxrs = await this._sqlClient.query('SELECT MAX(trade_id) AS ct FROM market_z48yrezw6k4gqnxhaseacjjywz1dsm0q0hd1wydx70c636c9jbng')
+        await this._markets.map(async (m: AquaMarket) => {
+            const baseName = this._marketBase32[m.address]
+            const mxrs = await this._sqlClient.query('SELECT MAX(trade_id) AS ct FROM ' + baseName + '_trades;')
             const mx = mxrs.rows[0]?.[0]
             logger.log('debug', `Set last trade id for market ${m.address}: ${mx}`)
             var lastId: number = 0
@@ -193,43 +261,90 @@ class Minion {
         res.writeHeader("Access-Control-Max-Age", "3600")
     }
 
-    private _getMarketHistory = async (res: HttpResponse, req: HttpRequest) => {
+    private _abortRequest(res: HttpResponse, status: number) {
+        if (!res.aborted) {
+            if (status === 404) {
+                res.writeStatus('404 Not Found')
+            } else {
+                res.writeStatus('500 Internal Error')
+            }
+            this._setCorsHeaders(res)
+            res.end()
+        }
+    }
+
+    private async _getData(res: HttpResponse) {
+        const pr = new Promise((resolve) => {
+            let buffer: Buffer
+            res.onData((ab, isLast) => {
+                const chunk = Buffer.from(ab)
+                if (isLast) {
+                    const toParse = buffer ? Buffer.concat([buffer, chunk]) : chunk
+                    const resolveValue = JSON.parse(toParse as unknown as string)
+                    resolve(resolveValue)
+                } else {
+                    const concatValue = buffer ? [buffer, chunk] : [chunk]
+                    buffer = Buffer.concat(concatValue)
+                }
+            })
+        })
+        var result
+        try {
+            result = await pr
+        } catch (error) {
+            logger.log('error', `Reading JSON failed: ${error}`)
+        }
+        return result
+    }
+
+    private _getMarketHistory = async (res: HttpResponse) => {
         res.onAborted(() => {
             res.aborted = true
         })
-        logger.log('debug', `Get Market History: ${req}`)
-        //const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
-        //const todayEnd = new Date(new Date().setHours(23, 59, 59, 999))
-        const monthStart = new Date(new Date(new Date().getFullYear(), new Date().getMonth(), 1).setHours(0, 0, 0, 0))
-        const monthEnd = new Date(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).setHours(23, 59, 59, 999))
-        var historyQuery
-        try {
-            historyQuery = await this._sqlClient.query(
-                "SELECT bucket, open, high, low, close FROM cs1min_z48yrezw6k4gqnxhaseacjjywz1dsm0q0hd1wydx70c636c9jbng WHERE bucket >= $1 AND bucket <= $2 ORDER BY bucket DESC",
-                [
-                    monthStart,
-                    monthEnd,
-                ], [
-                    DataType.Timestamptz,
-                    DataType.Timestamptz,
-                ]
-            )
-        } catch (error) {
-            logger.log('error', error)
-        }
+        var rdata: any = await this._getData(res)
         let rq = []
-        if (historyQuery) {
-            for await (const r of historyQuery.rows) {
-                rq.push({
-                    x: r[0],
-                    y: [
-                        r[1]?.toString(),
-                        r[2]?.toString(),
-                        r[3]?.toString(),
-                        r[4]?.toString(),
-                    ]
-                })
+        if ('market' in rdata) {
+            var market = rdata.market
+            if (!market || !this._marketBase32[market]) {
+                return this._abortRequest(res, 404)
             }
+            logger.log('debug', `Get Market History: ${market}`)
+            //const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
+            //const todayEnd = new Date(new Date().setHours(23, 59, 59, 999))
+            const monthStart = new Date(new Date(new Date().getFullYear(), new Date().getMonth(), 1).setHours(0, 0, 0, 0))
+            const monthEnd = new Date(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).setHours(23, 59, 59, 999))
+            const historyTable = this._marketBase32[market] + '_v1min'
+            var historyQuery
+            try {
+                historyQuery = await this._sqlClient.query(
+                    "SELECT bucket, open, high, low, close FROM " + historyTable + " WHERE bucket >= $1 AND bucket <= $2 ORDER BY bucket DESC",
+                    [
+                        monthStart,
+                        monthEnd,
+                    ], [
+                        DataType.Timestamptz,
+                        DataType.Timestamptz,
+                    ]
+                )
+            } catch (error) {
+                logger.log('error', error)
+            }
+            if (historyQuery) {
+                for await (const r of historyQuery.rows) {
+                    rq.push({
+                        x: r[0],
+                        y: [
+                            r[1]?.toString(),
+                            r[2]?.toString(),
+                            r[3]?.toString(),
+                            r[4]?.toString(),
+                        ]
+                    })
+                }
+            }
+        } else {
+            logger.log('debug', 'Invalid market history request')
+            return this._abortRequest(res, 404)
         }
         if (!res.aborted) {
             res.writeStatus('200 OK')
@@ -316,11 +431,11 @@ class Minion {
                 if (message.payload.trade_id > (this.status.lastTradeIds[message.market] as number)) {
                     logger.log('debug', `New trade found... ${message.market}:${message.payload.trade_id}`)
                     const dt = new Date(message.payload.timestamp * 1000)
-                    const marketTable = 'market_z48yrezw6k4gqnxhaseacjjywz1dsm0q0hd1wydx70c636c9jbng'
+                    const marketTable = this._marketBase32[message.market] + '_trades'
                     const insert = async () => {
                         try {
                             await this._sqlClient.query(
-                                "INSERT INTO " + marketTable + "(trade_id, action_id, maker_order_id, maker_filled, maker_id, taker_id, taker_side, ts, quantity, price, slot) VALUES ($1, $2, $3, $4, solana_account_id($5), solana_account_id($6), $7, $8, $9, $10, $11)",
+                                "INSERT INTO " + marketTable + "(trade_id, action_id, maker_order_id, maker_filled, maker_id, taker_id, taker_side, ts, quantity, price) VALUES ($1, $2, $3, $4, solana_account_id($5), solana_account_id($6), $7, $8, $9, $10)",
                                 [
                                     message.payload.trade_id,
                                     message.payload.action_id,
@@ -332,7 +447,6 @@ class Minion {
                                     dt,
                                     message.payload.amount,
                                     message.payload.price,
-                                    message.payload.slot,
                                 ], [
                                     DataType.Int8,
                                     DataType.Int8,
@@ -342,7 +456,6 @@ class Minion {
                                     DataType.Varchar,
                                     DataType.Bool,
                                     DataType.Timestamptz,
-                                    DataType.Int8,
                                     DataType.Int8,
                                     DataType.Int8,
                                 ]
@@ -586,6 +699,7 @@ if (minionNumber === 0) {
 
 minion.start(port).then(async () => {
     await minion.sqlConnect()
+    await minion.createMarkets()
 
     aquaDataChannel.onmessage = (message) => {
         lastPublishTimestamp = new Date()

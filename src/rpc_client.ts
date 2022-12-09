@@ -154,6 +154,7 @@ class AccountsChangeNotifications {
     private _state: 'PRISTINE' | 'PENDING' | 'PUBLISHED' = 'PRISTINE'
     private _accountsData: AccountsData = {
         tradeLog: undefined,
+        marketState: undefined,
     }
     private _slotStartTimestamp: number | undefined = undefined
     private _publishTID: NodeJS.Timer | undefined = undefined
@@ -182,13 +183,18 @@ class AccountsChangeNotifications {
             readonly commitment: string
         }
     ) {
-        logger.log('info', `Get accounts ${accounts.tradeLog}`)
+        logger.log('info', `Get tradeLog:${accounts.tradeLog} state:${accounts.marketState}`)
         this._accountsMeta = [
             {
                 name: 'tradeLog',
                 reqId: 1000,
                 address: accounts.tradeLog,
-            }
+            },
+            {
+                name: 'marketState',
+                reqId: 1001,
+                address: accounts.marketState,
+            },
         ]
         this._connectAndStreamData()
     }
@@ -417,7 +423,8 @@ class AccountsChangeNotifications {
 
     private _resetCurrentState() {
         this._accountsData = {
-            tradeLog: undefined
+            tradeLog: undefined,
+            marketState: undefined,
         }
         this._slotStartTimestamp = undefined
         this._currentSlot = undefined
@@ -526,6 +533,7 @@ class AccountsChangeNotifications {
         // clear pending accounts data
         this._accountsData = {
             tradeLog: undefined,
+            marketState: undefined,
         }
         this._slotStartTimestamp = undefined
 
@@ -554,7 +562,8 @@ class AccountsChangeNotifications {
 
     private _receivedDataForAllAccounts() {
         return (
-            this._accountsData.tradeLog !== undefined
+            this._accountsData.tradeLog !== undefined &&
+            this._accountsData.marketState !== undefined
         )
     }
 
@@ -567,7 +576,7 @@ class AccountsChangeNotifications {
         }
     }
 
-    private _update(accountName: 'tradeLog', accountData: Buffer, slot: number) {
+    private _update(accountName: 'tradeLog' | 'marketState', accountData: Buffer, slot: number) {
         if (logger.level === 'debug') {
             logger.log('debug', `Received ${accountName} account update, current state ${this._state}`, {
                 market: this._options.marketName,
@@ -643,7 +652,7 @@ export type AccountsNotificationPayload = {
     readonly accountsData: AccountsData
     readonly slot: number
 }
-export type AccountName = 'tradeLog'
+export type AccountName = 'tradeLog' | 'marketState'
 export type AccountsData = {
     [key in AccountName]?: Buffer
 }

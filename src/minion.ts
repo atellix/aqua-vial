@@ -1,8 +1,10 @@
+import path from 'path'
 import { getLayoutVersion, Market } from '@project-serum/serum'
 import { Connection, PublicKey } from '@solana/web3.js'
 import { Client, DataType } from 'ts-postgres'
 import { App, HttpRequest, HttpResponse, DISABLED, SSLApp, TemplatedApp, us_listen_socket_close, WebSocket } from 'uWebSockets.js'
 import { isMainThread, threadId, workerData } from 'worker_threads'
+import { AnchorProvider, Program, BorshAccountsCoder, EventParser } from '@project-serum/anchor'
 import { CHANNELS, MESSAGE_TYPES_PER_CHANNEL, OPS } from './consts'
 import {
     cleanupChannel,
@@ -21,6 +23,10 @@ import { MessageEnvelope } from './aqua_producer'
 import { ErrorResponse, RecentTrades, AquaMarket, AquaMarketStatus, SubRequest, SuccessResponse, AquaMarketUpdateLastId, MarketHistoryQuery } from './types'
 
 const base32 = require('base32.js')
+
+const ANCHOR_IDL = {
+    'aqua-dex': require(path.join(process.cwd(), 'idl/aqua_dex.json')),
+}
 
 const meta = {
     minionId: threadId
@@ -83,12 +89,19 @@ class Minion {
     private _listenSocket: any | undefined = undefined
     private _openConnectionsCount = 0
     private _tid: NodeJS.Timeout | undefined = undefined
+    private _aquaProgram: Program
+    private _aquaEventParser: EventParser
 
     status: AquaMarketStatus
+    provider: AnchorProvider
 
     private MAX_BACKPRESSURE = 3 * 1024 * 1024
     constructor(private readonly _nodeEndpoint: string, private readonly _markets: AquaMarket[], marketStatus: AquaMarketStatus) {
+        this.provider = AnchorProvider.env()
         this.status = marketStatus
+        const aquaDexPK = new PublicKey(ANCHOR_IDL['aqua-dex'].metadata.address)
+        this._aquaProgram = new Program(ANCHOR_IDL['aqua-dex'], aquaDexPK, this.provider)
+        this._aquaEventParser = new EventParser(aquaDexPK, this._aquaProgram.coder)
         this._marketNames = _markets.map((m) => m.name)
         _markets.forEach((m) => {
             var pk = new PublicKey(m.address)
@@ -508,6 +521,38 @@ schedule_interval => INTERVAL '${schedInterval}');`
                     }
                     insert()
                 }
+            }
+            if (message.type === 'event') {
+                logger.log('debug', `Get Signatures For Address: ${message.payload.state}`)
+                var txlist: string[] = []
+                this.provider.connection.getSignaturesForAddress(new PublicKey(message.payload.state), {}, 'confirmed').then((csi: any) => {
+                    for (const item of csi) {
+                        txlist.push(item.signature)
+                    }
+                    this.provider.connection.getTransactions(txlist, {commitment: 'confirmed', maxSupportedTransactionVersion: 0}).then((trl) => {
+                        for (var i = 0; i < trl.length; i++) {
+                            logger.log('debug', `Sig: ${txlist[i]}`)
+                            if (trl[i]) {
+                                var eventList = []
+                                const logs: string[] = trl[i]?.meta?.logMessages as string[]
+                                const sdata = JSON.stringify(logs, null, 4)
+                                //logger.log('debug', `Sig Data: ${sdata}`)
+                                const events = [...this._aquaEventParser.parseLogs(logs)]
+                                for (const ev of events) {
+                                    for (const k of Object.keys(ev.data)) {
+                                        const evrow = ev.data[k] as any
+                                        if (typeof evrow['toString'] === 'function') {
+                                            ev.data[k] = evrow.toString()
+                                        }
+                                    }
+                                    eventList.push([ev.name, ev.data])
+                                }
+                                const evdata = JSON.stringify(eventList, null, 4)
+                                logger.log('debug', `Sig Events: ${evdata}`)
+                            }
+                        }
+                    })
+                })
             }
             if (message.publish) {
                 this._server.publish(topic, message.payload)

@@ -54,6 +54,12 @@ export interface Quote extends DataMessage {
     readonly bestBid: PriceLevel | undefined
 }
 
+export interface MarketEvent extends DataMessage {
+    readonly type: 'event'
+    readonly state: string,
+    readonly action_id: number,
+}
+
 export interface Trade extends DataMessage {
     readonly type: 'trade'
     readonly event_type: string,
@@ -135,6 +141,7 @@ export type AquaMarket = {
 
 export type AquaMarketAccounts = {
     tradeLog: string
+    marketState: string
 }
 
 export type AquaMarketStatus = {

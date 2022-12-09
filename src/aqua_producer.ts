@@ -7,7 +7,7 @@ import { decimalPlaces, aquaDataChannel, aquaProducerReadyChannel, aquaStatusCha
 import { logger } from './logger'
 import { RPCClient } from './rpc_client'
 import { AquaMarket, AquaMarketAccounts, AquaMarketStatus } from './types'
-import { AnchorProvider, Program } from '@project-serum/anchor'
+import { AnchorProvider, Program, BorshAccountsCoder } from '@project-serum/anchor'
 
 const ANCHOR_IDL = {
     'aqua-dex': require(path.join(process.cwd(), 'idl/aqua_dex.json')),
@@ -56,7 +56,8 @@ export class AquaProducer {
         const marketData = await aquaDex.account?.market?.fetch(marketPK)
 
         const accounts = {
-            tradeLog: marketData?.tradeLog.toString()
+            marketState: marketData?.state.toString(),
+            tradeLog: marketData?.tradeLog.toString(),
         }
 
         // don't use Solana web3.js Connection but custom rpcClient so we have more control and insight what is going on
@@ -69,7 +70,7 @@ export class AquaProducer {
         const dataMapper = new DataMapper({
             market: this._options.market,
             accounts
-        }, this.status)
+        }, new BorshAccountsCoder(ANCHOR_IDL['aqua-dex']), this.status)
 
         let start = process.hrtime()
         const interval = 600

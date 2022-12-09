@@ -1,12 +1,13 @@
 import { Buffer } from 'buffer'
 import { PublicKey } from '@solana/web3.js'
 import { Layout, Sequence, struct, nu64, ns64, seq, u16, u8, blob } from '@solana/buffer-layout'
+import { BorshAccountsCoder } from '@project-serum/anchor'
 import BN from 'bn.js'
 import { logger } from './logger'
 import { AccountsNotificationPayload } from './rpc_client'
 import { MessageEnvelope } from './aqua_producer'
 import { aquaStatusChannel } from './helpers'
-import { AquaMarket, AquaMarketAccounts, AquaMarketStatus, Trade, DataMessage, AquaMarketUpdateLastId } from './types'
+import { AquaMarket, AquaMarketAccounts, AquaMarketStatus, Trade, DataMessage, AquaMarketUpdateLastId, MarketEvent } from './types'
 
 const base32 = require('base32.js')
 
@@ -59,14 +60,17 @@ interface LogSpec {
 export class DataMapper {
     private _initialized = false
     status: AquaMarketStatus
+    coder: BorshAccountsCoder
 
     constructor(
         private readonly _options: {
             readonly market: AquaMarket
             readonly accounts: AquaMarketAccounts
         },
+        accountCoder: BorshAccountsCoder,
         marketStatus: AquaMarketStatus
     ) {
+        this.coder = accountCoder
         this.status = marketStatus
         aquaStatusChannel.onmessage = (message) => {
             const msg: AquaMarketUpdateLastId = message.data as unknown as AquaMarketUpdateLastId
@@ -89,6 +93,24 @@ export class DataMapper {
                     this.status.lastTradeIds[this._options.market.address] = trade.trade_id
                     yield this._putInEnvelope(trade, false)
                 }
+            }
+        }
+        if (accountsData.marketState) {
+            logger.log('debug', 'New market state')
+            try {
+                const state = this.coder.decode('MarketState', accountsData.marketState)
+                const marketEvent: MarketEvent = {
+                    type: 'event',
+                    timestamp: '',
+                    market: this._options.market.address,
+                    state: this._options.accounts.marketState,
+                    version: 1,
+                    slot: slot,
+                    action_id: state.actionCounter?.toString(),
+                }
+                yield this._putInEnvelope(marketEvent, false)
+            } catch (error) {
+                logger.log('error', error)
             }
         }
     }

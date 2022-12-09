@@ -16,6 +16,7 @@ export const MESSAGE_TYPES_PER_CHANNEL: { [key in Channel]: readonly MessageType
 export type Channel = typeof CHANNELS[number]
 export type Op = typeof OPS[number]
 export type MessageType =
+  | 'event'
   | typeof LEVEL3_MESSAGE_TYPES[number]
   | typeof LEVEL2_MESSAGE_TYPES[number]
   | typeof LEVEL1_MESSAGE_TYPES[number]

@@ -1,3 +1,4 @@
+import path from 'path'
 import { PublicKey } from '@solana/web3.js'
 import { isMainThread, workerData } from 'worker_threads'
 import { MessageType } from './consts'
@@ -6,6 +7,11 @@ import { decimalPlaces, aquaDataChannel, aquaProducerReadyChannel, aquaStatusCha
 import { logger } from './logger'
 import { RPCClient } from './rpc_client'
 import { AquaMarket, AquaMarketAccounts, AquaMarketStatus } from './types'
+import { AnchorProvider, Program } from '@project-serum/anchor'
+
+const ANCHOR_IDL = {
+    'aqua-dex': require(path.join(process.cwd(), 'idl/aqua_dex.json')),
+}
 
 if (isMainThread) {
     const message = 'Exiting. Worker is not meant to run in main thread'
@@ -24,6 +30,7 @@ process.on('unhandledRejection', (err) => {
 
 export class AquaProducer {
     status: AquaMarketStatus
+    provider: AnchorProvider
 
     constructor(
         private readonly _options: {
@@ -33,6 +40,7 @@ export class AquaProducer {
             commitment: string
         }
     ) {
+        this.provider = AnchorProvider.env()
         this.status = {
             lastTradeIds: {}
         }
@@ -42,9 +50,13 @@ export class AquaProducer {
         let started = false
         logger.log('info', `Aqua producer starting for ${this._options.market.name} market...`)
 
-        // TODO: read this
+        const aquaDexPK = new PublicKey(ANCHOR_IDL['aqua-dex'].metadata.address)
+        const aquaDex = new Program(ANCHOR_IDL['aqua-dex'], aquaDexPK, this.provider)
+        const marketPK = new PublicKey(this._options.market.address)
+        const marketData = await aquaDex.account?.market?.fetch(marketPK)
+
         const accounts = {
-            tradeLog: 'ANMwhka1qLJ6Haz1FnRpU3F7w2mu6tBjxqdw1hFgpYCr'
+            tradeLog: marketData?.tradeLog.toString()
         }
 
         // don't use Solana web3.js Connection but custom rpcClient so we have more control and insight what is going on

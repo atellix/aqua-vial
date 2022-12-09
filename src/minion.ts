@@ -323,14 +323,31 @@ schedule_interval => INTERVAL '${schedInterval}');`
     }
 
     private _getMarketHistory = async (res: HttpResponse) => {
+        const marketViews: { [view: string]: boolean } = {
+            'v1m': true,
+            'v3m': true,
+            'v5m': true,
+            'v15m': true,
+            'v30m': true,
+            'v1h': true,
+            'v2h': true,
+            'v4h': true,
+            'v6h': true,
+            'v8h': true,
+            'v12h': true,
+            'v1d': true,
+            'v7d': true,
+            'v30d': true,
+        }
         res.onAborted(() => {
             res.aborted = true
         })
         var rdata: any = await this._getData(res)
         let rq = []
-        if ('market' in rdata) {
+        if ('market' in rdata && 'view' in rdata) {
             var market = rdata.market
-            if (!market || !this._marketBase32[market]) {
+            var view = rdata.view
+            if (!market || !this._marketBase32[market] || !marketViews[view]) {
                 return this._abortRequest(res, 404)
             }
             logger.log('debug', `Get Market History: ${market}`)
@@ -338,7 +355,7 @@ schedule_interval => INTERVAL '${schedInterval}');`
             //const todayEnd = new Date(new Date().setHours(23, 59, 59, 999))
             const monthStart = new Date(new Date(new Date().getFullYear(), new Date().getMonth(), 1).setHours(0, 0, 0, 0))
             const monthEnd = new Date(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).setHours(23, 59, 59, 999))
-            const historyTable = this._marketBase32[market] + '_v1m'
+            const historyTable = this._marketBase32[market] + '_' + view
             var historyQuery
             try {
                 historyQuery = await this._sqlClient.query(

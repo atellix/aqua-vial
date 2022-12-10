@@ -136,12 +136,12 @@ export class DataMapper {
             nu64('header_size'),
             nu64('offset_size'),
             nu64('alloc_items'),
-            seq(stTypedPageItem, 128, 'alloc_pages'), // TYPE_MAX_PAGES
+            seq(stTypedPageItem, 16, 'alloc_pages'), // TYPE_MAX_PAGES
         ]);
         const stSlabAlloc = struct<SlabAlloc>([
             u16('top_unused_page'),
-            seq(stTypedPage, 16, 'type_page'), // TYPE_MAX
-            seq(blob(16384), 4, 'pages'), // PAGE_SIZE
+            seq(stTypedPage, 4, 'type_page'), // TYPE_MAX
+            seq(blob(16384), 1, 'pages'), // PAGE_SIZE
         ]);
         var res = stSlabAlloc.decode(data)
         var logVec = res['type_page'][0]

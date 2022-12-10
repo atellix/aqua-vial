@@ -68,6 +68,11 @@
           "isSigner": false
         },
         {
+          "name": "admin",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "agent",
           "isMut": false,
           "isSigner": false
@@ -76,6 +81,16 @@
           "name": "manager",
           "isMut": true,
           "isSigner": true
+        },
+        {
+          "name": "feeManager",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "vaultManager",
+          "isMut": false,
+          "isSigner": false
         },
         {
           "name": "mktMint",
@@ -316,7 +331,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "limitAsk",
@@ -421,7 +439,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "marketBid",
@@ -522,7 +543,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "marketAsk",
@@ -623,7 +647,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "cancelOrder",
@@ -740,6 +767,16 @@
         },
         {
           "name": "settle",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "settlePrev",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "settleNext",
           "isMut": true,
           "isSigner": false
         },
@@ -939,6 +976,16 @@
           "isSigner": false
         },
         {
+          "name": "settlePrev",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "settleNext",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "result",
           "isMut": true,
           "isSigner": true
@@ -960,7 +1007,10 @@
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [],
+      "returns": {
+        "defined": "LogStatusResult"
+      }
     },
     {
       "name": "managerTransferSol",
@@ -973,6 +1023,11 @@
         {
           "name": "state",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "admin",
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -997,6 +1052,53 @@
       ]
     },
     {
+      "name": "managerWithdrawFees",
+      "accounts": [
+        {
+          "name": "market",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "agent",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "admin",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "manager",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "managerPrcToken",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "prcVault",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "splTokenProg",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [],
+      "returns": "u64"
+    },
+    {
       "name": "managerUpdateMarket",
       "accounts": [
         {
@@ -1005,9 +1107,24 @@
           "isSigner": false
         },
         {
+          "name": "admin",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "manager",
           "isMut": true,
           "isSigner": true
+        },
+        {
+          "name": "feeManager",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "vaultManager",
+          "isMut": false,
+          "isSigner": false
         }
       ],
       "args": [
@@ -1046,37 +1163,6 @@
       ]
     },
     {
-      "name": "createVault",
-      "accounts": [
-        {
-          "name": "market",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "manager",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "owner",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "vault",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "vaultDeposit",
       "accounts": [
         {
@@ -1090,8 +1176,13 @@
           "isSigner": false
         },
         {
-          "name": "manager",
+          "name": "admin",
           "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "manager",
+          "isMut": true,
           "isSigner": true
         },
         {
@@ -1105,8 +1196,23 @@
           "isSigner": false
         },
         {
+          "name": "settlePrev",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "settleNext",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "vault",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
           "isSigner": false
         }
       ],
@@ -1245,6 +1351,11 @@
         {
           "name": "market",
           "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "admin",
+          "isMut": true,
           "isSigner": false
         },
         {
@@ -1459,6 +1570,22 @@
           },
           {
             "name": "settle0",
+            "type": "publicKey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MarketAdmin",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "feeManager",
+            "type": "publicKey"
+          },
+          {
+            "name": "vaultManager",
             "type": "publicKey"
           }
         ]
@@ -1730,74 +1857,6 @@
           },
           {
             "name": "Account"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ErrorCode",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "AccessDenied"
-          },
-          {
-            "name": "TokenAccountFrozen"
-          },
-          {
-            "name": "InsufficientTokens"
-          },
-          {
-            "name": "MarketClosed"
-          },
-          {
-            "name": "AccountNotFound"
-          },
-          {
-            "name": "RecordNotFound"
-          },
-          {
-            "name": "OrderNotFound"
-          },
-          {
-            "name": "InvalidParameters"
-          },
-          {
-            "name": "InvalidAccount"
-          },
-          {
-            "name": "InvalidDerivedAccount"
-          },
-          {
-            "name": "VaultNotEmpty"
-          },
-          {
-            "name": "OrderNotFilled"
-          },
-          {
-            "name": "InternalError"
-          },
-          {
-            "name": "ExternalError"
-          },
-          {
-            "name": "SettlementLogFull"
-          },
-          {
-            "name": "SettlementLogNotEmpty"
-          },
-          {
-            "name": "OrderbookFull"
-          },
-          {
-            "name": "RetrySettlementAccount"
-          },
-          {
-            "name": "QuantityBelowMinimum"
-          },
-          {
-            "name": "Overflow"
           }
         ]
       }
@@ -2283,6 +2342,108 @@
           "index": false
         }
       ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "AccessDenied",
+      "msg": "Access denied"
+    },
+    {
+      "code": 6001,
+      "name": "TokenAccountFrozen",
+      "msg": "Token account frozen"
+    },
+    {
+      "code": 6002,
+      "name": "InsufficientTokens",
+      "msg": "Insufficient tokens"
+    },
+    {
+      "code": 6003,
+      "name": "MarketClosed",
+      "msg": "Market closed"
+    },
+    {
+      "code": 6004,
+      "name": "AccountNotFound",
+      "msg": "Account not found"
+    },
+    {
+      "code": 6005,
+      "name": "RecordNotFound",
+      "msg": "Record not found"
+    },
+    {
+      "code": 6006,
+      "name": "OrderNotFound",
+      "msg": "Order not found"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidParameters",
+      "msg": "Invalid parameters"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAccount",
+      "msg": "Invalid account"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidDerivedAccount",
+      "msg": "Invalid derived account"
+    },
+    {
+      "code": 6010,
+      "name": "VaultNotEmpty",
+      "msg": "Vault not empty"
+    },
+    {
+      "code": 6011,
+      "name": "OrderNotFilled",
+      "msg": "Order not filled"
+    },
+    {
+      "code": 6012,
+      "name": "InternalError",
+      "msg": "Internal error"
+    },
+    {
+      "code": 6013,
+      "name": "ExternalError",
+      "msg": "External error"
+    },
+    {
+      "code": 6014,
+      "name": "SettlementLogFull",
+      "msg": "Settlement log full"
+    },
+    {
+      "code": 6015,
+      "name": "SettlementLogNotEmpty",
+      "msg": "Settlement log not empty"
+    },
+    {
+      "code": 6016,
+      "name": "OrderbookFull",
+      "msg": "Orderbook full"
+    },
+    {
+      "code": 6017,
+      "name": "RetrySettlementAccount",
+      "msg": "Settlement log account does not match market, please update market data and retry"
+    },
+    {
+      "code": 6018,
+      "name": "QuantityBelowMinimum",
+      "msg": "Quantity below minimum"
+    },
+    {
+      "code": 6019,
+      "name": "Overflow",
+      "msg": "Overflow"
     }
   ],
   "metadata": {

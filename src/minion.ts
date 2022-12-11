@@ -61,8 +61,15 @@ const RateLimit = (limit: number, interval: number) => {
     }
 }
 
+//type TPromiseObjectNull = Promise<{ [key: string]: any } | null>
 
-type TPromiseObjectNull = Promise<{ [key: string]: any } | null>
+type EventItem = {
+    readonly tx: string
+    readonly index: number
+    readonly event: string
+    readonly data: any
+    readonly slot: number
+}
 
 // Minion is the actual HTTP and WS server implementation
 // it is meant to run in Node.js worker_thread and handles:
@@ -473,6 +480,81 @@ schedule_interval => INTERVAL '${schedInterval}');`
         logger.log('info', 'Cached markets info response', meta)
     }
 
+    private async _storeSignatures(signatures: string[], slots: { [tx: string]: number }, market: string) {
+        signatures.reverse()
+        for (const sig of signatures) {
+            await this._sqlClient.query(
+                "INSERT INTO solana_market_transaction (transaction_id, market_id, slot) VALUES (solana_tx_id($1), solana_account_id($2), $3) ON CONFLICT DO NOTHING;",
+                [
+                    sig,
+                    market,
+                    slots[sig] as number,
+                ], [
+                    DataType.Varchar,
+                    DataType.Varchar,
+                    DataType.Int8,
+                ]
+            )
+        }
+    }
+
+    private async _storeEventRef(event: EventItem, market: string, program: string, dkey: string, user: string) {
+        await this._sqlClient.query(
+            "INSERT INTO solana_market_ref (transaction_id, log_index, market_id, program_id, user_id, data_key, event_name) VALUES (solana_tx_id($1), $2, solana_account_id($3), solana_account_id($4), solana_account_id($5), $6, $7) ON CONFLICT DO NOTHING;",
+            [
+                event.tx,
+                event.index,
+                market,
+                program,
+                user,
+                dkey,
+                event.event,
+            ], [
+                DataType.Varchar,
+                DataType.Int4,
+                DataType.Varchar,
+                DataType.Varchar,
+                DataType.Varchar,
+                DataType.Varchar,
+                DataType.Varchar,
+            ]
+        )
+    }
+
+    private async _storeEvents(events: EventItem[], market: string, program: string) {
+        events.reverse()
+        for (const event of events) {
+            await this._sqlClient.query(
+                "INSERT INTO solana_market_event (transaction_id, log_index, market_id, slot, program_id, event_name, event_data) VALUES (solana_tx_id($1), $2, solana_account_id($3), $4, solana_account_id($5), $6, $7) ON CONFLICT DO NOTHING;",
+                [
+                    event.tx,
+                    event.index,
+                    market,
+                    event.slot,
+                    program,
+                    event.event,
+                    event.data,
+                ], [
+                    DataType.Varchar,
+                    DataType.Int4,
+                    DataType.Varchar,
+                    DataType.Int8,
+                    DataType.Varchar,
+                    DataType.Varchar,
+                    DataType.Json,
+                ]
+            )
+            if (event.event === 'OrderEvent') {
+                this._storeEventRef(event, market, program, 'user', event.data.user)
+            } else if (event.event === 'SettleEvent') {
+                this._storeEventRef(event, market, program, 'owner', event.data.owner)
+            } else if (event.event === 'MatchEvent') {
+                this._storeEventRef(event, market, program, 'maker', event.data.maker)
+                this._storeEventRef(event, market, program, 'taker', event.data.taker)
+            }
+        }
+    }
+
     public processMessages(messages: MessageEnvelope[]) {
         for (const message of messages) {
             const topic = `${message.type}-${message.market}`
@@ -524,33 +606,52 @@ schedule_interval => INTERVAL '${schedInterval}');`
             }
             if (message.type === 'event') {
                 logger.log('debug', `Get Signatures For Address: ${message.payload.state}`)
-                var txlist: string[] = []
                 this.provider.connection.getSignaturesForAddress(new PublicKey(message.payload.state), {}, 'confirmed').then((csi: any) => {
+                    var txlist: string[] = []
                     for (const item of csi) {
                         txlist.push(item.signature)
                     }
                     this.provider.connection.getTransactions(txlist, {commitment: 'confirmed', maxSupportedTransactionVersion: 0}).then((trl) => {
+                        const program = this._aquaProgram.programId.toString()
+                        var eventList: EventItem[] = []
+                        var slots: { [tx: string]: number } = {}
                         for (var i = 0; i < trl.length; i++) {
                             logger.log('debug', `Sig: ${txlist[i]}`)
                             if (trl[i]) {
-                                var eventList = []
+                                const slot = trl[i]?.slot
+                                slots[txlist[i] as string] = slot as number
                                 const logs: string[] = trl[i]?.meta?.logMessages as string[]
                                 const sdata = JSON.stringify(logs, null, 4)
                                 //logger.log('debug', `Sig Data: ${sdata}`)
                                 const events = [...this._aquaEventParser.parseLogs(logs)]
-                                for (const ev of events) {
-                                    for (const k of Object.keys(ev.data)) {
-                                        const evrow = ev.data[k] as any
-                                        if (typeof evrow['toString'] === 'function') {
-                                            ev.data[k] = evrow.toString()
+                                for (var j = 0; j < events.length; j++) {
+                                    const ev = events[j]
+                                    if (ev) {
+                                        for (const k of Object.keys(ev.data)) {
+                                            const evrow = ev.data[k] as any
+                                            if (typeof evrow['toString'] === 'function') {
+                                                ev.data[k] = evrow.toString()
+                                            }
                                         }
+                                        const evt: EventItem = {
+                                            tx: txlist[i] as string,
+                                            index: j,
+                                            slot: slot as number,
+                                            event: ev.name,
+                                            data: ev.data,
+                                        }
+                                        eventList.push(evt)
                                     }
-                                    eventList.push([ev.name, ev.data])
                                 }
-                                const evdata = JSON.stringify(eventList, null, 4)
-                                logger.log('debug', `Sig Events: ${evdata}`)
                             }
                         }
+                        this._storeSignatures(txlist, slots, message.market).then(() => {
+                            logger.log('debug', `Stored Signatures`)
+                        })
+                        this._storeEvents(eventList, message.market, program).then(() => {
+                            const evdata = JSON.stringify(eventList, null, 4)
+                            logger.log('debug', `Stored Events: ${evdata}`)
+                        })
                     })
                 })
             }

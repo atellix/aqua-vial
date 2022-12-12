@@ -507,7 +507,9 @@ schedule_interval => INTERVAL '${schedInterval}');`
             res.aborted = true
         })
         var rdata: any = await this._getData(res)
-        let rq = []
+        var rq = []
+        var ct = Number(0)
+        var cts = ''
         if ('market' in rdata && 'user' in rdata) {
             try {
                 const marketPK = new PublicKey(rdata.market)
@@ -518,14 +520,46 @@ schedule_interval => INTERVAL '${schedInterval}');`
                     return this._abortRequest(res, 404)
                 }
                 logger.log('debug', `Get Trade List: market:${market} user:${user}`)
-                const tradeQuery = await this._sqlClient.query(
-                    "SELECT smr.ts, st.sig, (sme.event_data->>'tradeId')::integer as trade_id, sme.event_data, smr.data_key FROM solana_market_ref smr, solana_account sa, solana_transaction st, solana_market_event sme WHERE st.id=smr.transaction_id AND sa.id=smr.user_id AND sa.address=$1 AND smr.market_id = solana_account_id($2) AND smr.event_name='MatchEvent' AND smr.transaction_id=sme.transaction_id AND smr.log_index = sme.log_index ORDER BY trade_id DESC LIMIT 20 OFFSET 0",
+                const countQuery = await this._sqlClient.query(
+                    "SELECT COUNT(smr.id) FROM solana_market_ref smr, solana_account sa, solana_transaction st WHERE st.id=smr.transaction_id AND sa.id=smr.user_id AND sa.address=$1 AND smr.market_id = solana_account_id($2) AND smr.event_name='MatchEvent'",
                     [
                         user,
                         market,
                     ], [
                         DataType.Varchar,
                         DataType.Varchar,
+                    ]
+                )
+                if (countQuery) {
+                    ct = countQuery.rows[0]?.[0] as number
+                    cts = ct.toString()
+                }
+
+                var limit = 10
+                var offset = 0
+                if ('page' in rdata) {
+                    var pg = rdata.page
+                    if (!Number.isInteger(pg) ) {
+                        return this._abortRequest(res, 404)
+                    }
+                    var page = new Number(pg)
+                    if (page < 1) {
+                        return this._abortRequest(res, 404)
+                    }
+                    offset = limit * (page as number - 1)
+                }
+                const tradeQuery = await this._sqlClient.query(
+                    "SELECT smr.ts, st.sig, (sme.event_data->>'tradeId')::integer as trade_id, sme.event_data, smr.data_key FROM solana_market_ref smr, solana_account sa, solana_transaction st, solana_market_event sme WHERE st.id=smr.transaction_id AND sa.id=smr.user_id AND sa.address=$1 AND smr.market_id = solana_account_id($2) AND smr.event_name='MatchEvent' AND smr.transaction_id=sme.transaction_id AND smr.log_index = sme.log_index ORDER BY trade_id DESC LIMIT $3 OFFSET $4",
+                    [
+                        user,
+                        market,
+                        limit,
+                        offset,
+                    ], [
+                        DataType.Varchar,
+                        DataType.Varchar,
+                        DataType.Int4,
+                        DataType.Int4,
                     ]
                 )
                 if (tradeQuery) {
@@ -551,6 +585,7 @@ schedule_interval => INTERVAL '${schedInterval}');`
             this._setCorsHeaders(res)
             res.end(JSON.stringify({
                 'result': 'ok',
+                'count': new Number(cts),
                 'trades': rq,
             }))
         }

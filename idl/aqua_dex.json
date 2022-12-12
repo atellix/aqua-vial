@@ -1912,6 +1912,11 @@
           "index": false
         },
         {
+          "name": "takerFee",
+          "type": "u64",
+          "index": false
+        },
+        {
           "name": "amount",
           "type": "u64",
           "index": false

@@ -5,6 +5,7 @@ import { Client, DataType } from 'ts-postgres'
 import { App, HttpRequest, HttpResponse, DISABLED, SSLApp, TemplatedApp, us_listen_socket_close, WebSocket } from 'uWebSockets.js'
 import { isMainThread, threadId, workerData } from 'worker_threads'
 import { AnchorProvider, Program, BorshAccountsCoder, EventParser } from '@project-serum/anchor'
+import { DateTime } from 'luxon'
 import { CHANNELS, MESSAGE_TYPES_PER_CHANNEL, OPS } from './consts'
 import {
     cleanupChannel,
@@ -69,6 +70,9 @@ type EventItem = {
     readonly event: string
     readonly data: any
     readonly slot: number
+}
+type ViewItem = {
+    readonly days: number
 }
 
 // Minion is the actual HTTP and WS server implementation
@@ -162,6 +166,16 @@ class Minion {
             //.get(`${apiPrefix}/markets`, this._listMarkets) // TODO
             .post(`${apiPrefix}/history`, this._getMarketHistory)
             .options(`${apiPrefix}/history`, (res) => {
+                this._setCorsHeaders(res)
+                res.end()
+            })
+            .post(`${apiPrefix}/last_tx`, this._getLastTransaction)
+            .options(`${apiPrefix}/last_tx`, (res) => {
+                this._setCorsHeaders(res)
+                res.end()
+            })
+            .post(`${apiPrefix}/trades`, this._getTradeList)
+            .options(`${apiPrefix}/trades`, (res) => {
                 this._setCorsHeaders(res)
                 res.end()
             })
@@ -343,21 +357,21 @@ schedule_interval => INTERVAL '${schedInterval}');`
     }
 
     private _getMarketHistory = async (res: HttpResponse) => {
-        const marketViews: { [view: string]: boolean } = {
-            'v1m': true,
-            'v3m': true,
-            'v5m': true,
-            'v15m': true,
-            'v30m': true,
-            'v1h': true,
-            'v2h': true,
-            'v4h': true,
-            'v6h': true,
-            'v8h': true,
-            'v12h': true,
-            'v1d': true,
-            'v7d': true,
-            'v30d': true,
+        const marketViews: { [view: string]: ViewItem } = {
+            'v1m': { days: 1 },
+            'v3m': { days: 1 },
+            'v5m': { days: 1 },
+            'v15m': { days: 2 },
+            'v30m': { days: 2 },
+            'v1h': { days: 3 },
+            'v2h': { days: 3 },
+            'v4h': { days: 3 },
+            'v6h': { days: 10 },
+            'v8h': { days: 10 },
+            'v12h': { days: 30 },
+            'v1d': { days: 90 },
+            'v7d': { days: 365 },
+            'v30d': { days: 1095 },
         }
         res.onAborted(() => {
             res.aborted = true
@@ -365,44 +379,43 @@ schedule_interval => INTERVAL '${schedInterval}');`
         var rdata: any = await this._getData(res)
         let rq = []
         if ('market' in rdata && 'view' in rdata) {
-            var market = rdata.market
-            var view = rdata.view
-            if (!market || !this._marketBase32[market] || !marketViews[view]) {
-                return this._abortRequest(res, 404)
-            }
-            logger.log('debug', `Get Market History: ${market}`)
-            //const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
-            //const todayEnd = new Date(new Date().setHours(23, 59, 59, 999))
-            const monthStart = new Date(new Date(new Date().getFullYear(), new Date().getMonth(), 1).setHours(0, 0, 0, 0))
-            const monthEnd = new Date(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).setHours(23, 59, 59, 999))
-            const historyTable = this._marketBase32[market] + '_' + view
-            var historyQuery
             try {
-                historyQuery = await this._sqlClient.query(
+                const marketPK = new PublicKey(rdata.market)
+                const market = marketPK.toString()
+                const view = rdata.view
+                if (!market || !this._marketBase32[market] || typeof marketViews[view] === 'undefined') {
+                    return this._abortRequest(res, 404)
+                }
+                logger.log('debug', `Get Market History: market:${market} view:${view}`)
+                const viewDuration = marketViews[view]?.days
+                const rangeStart = DateTime.now().toUTC().minus({ days: viewDuration }).startOf('day').toJSDate()
+                const rangeEnd = DateTime.now().toUTC().endOf('day').toJSDate()
+                const historyTable = this._marketBase32[market] + '_' + view
+                const historyQuery = await this._sqlClient.query(
                     "SELECT bucket, open, high, low, close FROM " + historyTable + " WHERE bucket >= $1 AND bucket <= $2 ORDER BY bucket DESC",
                     [
-                        monthStart,
-                        monthEnd,
+                        rangeStart,
+                        rangeEnd,
                     ], [
                         DataType.Timestamptz,
                         DataType.Timestamptz,
                     ]
                 )
+                if (historyQuery) {
+                    for await (const r of historyQuery.rows) {
+                        rq.push({
+                            x: r[0],
+                            y: [
+                                r[1]?.toString(),
+                                r[2]?.toString(),
+                                r[3]?.toString(),
+                                r[4]?.toString(),
+                            ]
+                        })
+                    }
+                }
             } catch (error) {
                 logger.log('error', error)
-            }
-            if (historyQuery) {
-                for await (const r of historyQuery.rows) {
-                    rq.push({
-                        x: r[0],
-                        y: [
-                            r[1]?.toString(),
-                            r[2]?.toString(),
-                            r[3]?.toString(),
-                            r[4]?.toString(),
-                        ]
-                    })
-                }
             }
         } else {
             logger.log('debug', 'Invalid market history request')
@@ -416,7 +429,130 @@ schedule_interval => INTERVAL '${schedInterval}');`
                 'result': 'ok',
                 'history': rq,
             }))
-            logger.log('debug', `Sending reply...`)
+        }
+    }
+
+    private _getLastSignature = async (marketInput: string) => {
+        var rq = null
+        try {
+            const marketPK = new PublicKey(marketInput)
+            const market = marketPK.toString()
+            //logger.log('debug', `Get Latest Signature: market:${market}`)
+            const sigQuery = await this._sqlClient.query(
+                "SELECT st.sig FROM solana_transaction st, solana_market_transaction smt WHERE smt.market_id=solana_account_id($1) AND smt.transaction_id=st.id ORDER BY smt.transaction_id DESC LIMIT 1",
+                [
+                    market,
+                ], [
+                    DataType.Varchar,
+                ]
+            )
+            if (sigQuery && sigQuery.rows.length) {
+                rq = sigQuery.rows[0]?.[0]
+            }
+        } catch (error) {
+            logger.log('error', error)
+        }
+        return rq
+    }
+
+    private _getLastTransaction = async (res: HttpResponse) => {
+        res.onAborted(() => {
+            res.aborted = true
+        })
+        var rdata: any = await this._getData(res)
+        let rq = null
+        if ('market' in rdata && 'user' in rdata) {
+            try {
+                const marketPK = new PublicKey(rdata.market)
+                const userPK = new PublicKey(rdata.user)
+                const market = marketPK.toString()
+                const user = userPK.toString()
+                if (!market || !this._marketBase32[market]) {
+                    return this._abortRequest(res, 404)
+                }
+                logger.log('debug', `Get Latest Transaction: market:${market} user:${user}`)
+                const txQuery = await this._sqlClient.query(
+                    "SELECT st.sig FROM solana_market_ref smr, solana_account sa, solana_transaction st WHERE st.id=smr.transaction_id AND sa.id=smr.user_id AND sa.address=$1 AND smr.event_name='MatchEvent' AND smr.market_id = solana_account_id($2) ORDER BY smr.ts DESC LIMIT 1",
+                    [
+                        user,
+                        market,
+                    ], [
+                        DataType.Varchar,
+                        DataType.Varchar,
+                    ]
+                )
+                if (txQuery && txQuery.rows.length) {
+                    rq = txQuery.rows[0]?.[0]
+                }
+            } catch (error) {
+                logger.log('error', error)
+            }
+        } else {
+            logger.log('debug', 'Invalid last transaction request')
+            return this._abortRequest(res, 404)
+        }
+        if (!res.aborted) {
+            res.writeStatus('200 OK')
+            res.writeHeader('Content-Type', 'application/json')
+            this._setCorsHeaders(res)
+            res.end(JSON.stringify({
+                'result': 'ok',
+                'lastTx': rq,
+            }))
+        }
+    }
+
+    private _getTradeList = async (res: HttpResponse) => {
+        res.onAborted(() => {
+            res.aborted = true
+        })
+        var rdata: any = await this._getData(res)
+        let rq = []
+        if ('market' in rdata && 'user' in rdata) {
+            try {
+                const marketPK = new PublicKey(rdata.market)
+                const userPK = new PublicKey(rdata.user)
+                const market = marketPK.toString()
+                const user = userPK.toString()
+                if (!market || !this._marketBase32[market]) {
+                    return this._abortRequest(res, 404)
+                }
+                logger.log('debug', `Get Trade List: market:${market} user:${user}`)
+                const tradeQuery = await this._sqlClient.query(
+                    "SELECT smr.ts, st.sig, (sme.event_data->>'tradeId')::integer as trade_id, sme.event_data, smr.data_key FROM solana_market_ref smr, solana_account sa, solana_transaction st, solana_market_event sme WHERE st.id=smr.transaction_id AND sa.id=smr.user_id AND sa.address=$1 AND smr.market_id = solana_account_id($2) AND smr.event_name='MatchEvent' AND smr.transaction_id=sme.transaction_id AND smr.log_index = sme.log_index ORDER BY trade_id DESC LIMIT 20 OFFSET 0",
+                    [
+                        user,
+                        market,
+                    ], [
+                        DataType.Varchar,
+                        DataType.Varchar,
+                    ]
+                )
+                if (tradeQuery) {
+                    for await (const r of tradeQuery.rows) {
+                        rq.push({
+                            'ts': r[0],
+                            'sig': r[1],
+                            'data': r[3],
+                            'role': r[4],
+                        })
+                    }
+                }
+            } catch (error) {
+                logger.log('error', error)
+            }
+        } else {
+            logger.log('debug', 'Invalid last transaction request')
+            return this._abortRequest(res, 404)
+        }
+        if (!res.aborted) {
+            res.writeStatus('200 OK')
+            res.writeHeader('Content-Type', 'application/json')
+            this._setCorsHeaders(res)
+            res.end(JSON.stringify({
+                'result': 'ok',
+                'trades': rq,
+            }))
         }
     }
 
@@ -427,44 +563,6 @@ schedule_interval => INTERVAL '${schedInterval}');`
         res.onAborted(() => {
             res.aborted = true
         })
-
-        /*if (this._cachedListMarketsResponse === undefined) {
-            const markets = await Promise.all(
-                this._markets.map((market) => {
-                    return executeAndRetry(
-                        async () => {
-                            const connection = new Connection(this._nodeEndpoint)
-                            const { tickSize, minOrderSize, baseMintAddress, quoteMintAddress, programId } = await Market.load(
-                                connection,
-                                new PublicKey(market.address),
-                                undefined,
-                                new PublicKey(market.programId)
-                            )
-
-                            const [baseCurrency, quoteCurrency] = market.name.split('/')
-                            const serumMarket: SerumListMarketItem = {
-                                name: market.name,
-                                baseCurrency: baseCurrency!,
-                                quoteCurrency: quoteCurrency!,
-                                version: getLayoutVersion(programId),
-                                address: market.address,
-                                programId: market.programId,
-                                baseMintAddress: baseMintAddress.toBase58(),
-                                quoteMintAddress: quoteMintAddress.toBase58(),
-                                tickSize,
-                                minOrderSize,
-                                deprecated: market.deprecated
-                            }
-                            return serumMarket
-                        },
-                        { maxRetries: 10 }
-                    )
-                })
-            )
-
-            this._cachedListMarketsResponse = JSON.stringify(markets, null, 2)
-            serumMarketsChannel.postMessage(this._cachedListMarketsResponse)
-        }*/
 
         await wait(1)
 
@@ -606,51 +704,57 @@ schedule_interval => INTERVAL '${schedInterval}');`
             }
             if (message.type === 'event') {
                 logger.log('debug', `Get Signatures For Address: ${message.payload.state}`)
-                this.provider.connection.getSignaturesForAddress(new PublicKey(message.payload.state), {}, 'confirmed').then((csi: any) => {
-                    var txlist: string[] = []
-                    for (const item of csi) {
-                        txlist.push(item.signature)
+                this._getLastSignature(message.market).then((lastSig) => {
+                    var sigOpts: any = {}
+                    if (lastSig) {
+                        sigOpts['until'] = lastSig
                     }
-                    this.provider.connection.getTransactions(txlist, {commitment: 'confirmed', maxSupportedTransactionVersion: 0}).then((trl) => {
-                        const program = this._aquaProgram.programId.toString()
-                        var eventList: EventItem[] = []
-                        var slots: { [tx: string]: number } = {}
-                        for (var i = 0; i < trl.length; i++) {
-                            logger.log('debug', `Sig: ${txlist[i]}`)
-                            if (trl[i]) {
-                                const slot = trl[i]?.slot
-                                slots[txlist[i] as string] = slot as number
-                                const logs: string[] = trl[i]?.meta?.logMessages as string[]
-                                const sdata = JSON.stringify(logs, null, 4)
-                                //logger.log('debug', `Sig Data: ${sdata}`)
-                                const events = [...this._aquaEventParser.parseLogs(logs)]
-                                for (var j = 0; j < events.length; j++) {
-                                    const ev = events[j]
-                                    if (ev) {
-                                        for (const k of Object.keys(ev.data)) {
-                                            const evrow = ev.data[k] as any
-                                            if (typeof evrow['toString'] === 'function') {
-                                                ev.data[k] = evrow.toString()
+                    this.provider.connection.getSignaturesForAddress(new PublicKey(message.payload.state), sigOpts, 'confirmed').then((csi: any) => {
+                        var txlist: string[] = []
+                        for (const item of csi) {
+                            txlist.push(item.signature)
+                        }
+                        this.provider.connection.getTransactions(txlist, {commitment: 'confirmed', maxSupportedTransactionVersion: 0}).then((trl) => {
+                            const program = this._aquaProgram.programId.toString()
+                            var eventList: EventItem[] = []
+                            var slots: { [tx: string]: number } = {}
+                            for (var i = 0; i < trl.length; i++) {
+                                logger.log('debug', `Sig: ${txlist[i]}`)
+                                if (trl[i]) {
+                                    const slot = trl[i]?.slot
+                                    slots[txlist[i] as string] = slot as number
+                                    const logs: string[] = trl[i]?.meta?.logMessages as string[]
+                                    const sdata = JSON.stringify(logs, null, 4)
+                                    //logger.log('debug', `Sig Data: ${sdata}`)
+                                    const events = [...this._aquaEventParser.parseLogs(logs)]
+                                    for (var j = 0; j < events.length; j++) {
+                                        const ev = events[j]
+                                        if (ev) {
+                                            for (const k of Object.keys(ev.data)) {
+                                                const evrow = ev.data[k] as any
+                                                if (typeof evrow['toString'] === 'function') {
+                                                    ev.data[k] = evrow.toString()
+                                                }
                                             }
+                                            const evt: EventItem = {
+                                                tx: txlist[i] as string,
+                                                index: j,
+                                                slot: slot as number,
+                                                event: ev.name,
+                                                data: ev.data,
+                                            }
+                                            eventList.push(evt)
                                         }
-                                        const evt: EventItem = {
-                                            tx: txlist[i] as string,
-                                            index: j,
-                                            slot: slot as number,
-                                            event: ev.name,
-                                            data: ev.data,
-                                        }
-                                        eventList.push(evt)
                                     }
                                 }
                             }
-                        }
-                        this._storeSignatures(txlist, slots, message.market).then(() => {
-                            logger.log('debug', `Stored Signatures`)
-                        })
-                        this._storeEvents(eventList, message.market, program).then(() => {
-                            const evdata = JSON.stringify(eventList, null, 4)
-                            logger.log('debug', `Stored Events: ${evdata}`)
+                            this._storeSignatures(txlist, slots, message.market).then(() => {
+                                logger.log('debug', `Stored Signatures`)
+                            })
+                            this._storeEvents(eventList, message.market, program).then(() => {
+                                const evdata = JSON.stringify(eventList, null, 4)
+                                logger.log('debug', `Stored Events: ${evdata}`)
+                            })
                         })
                     })
                 })

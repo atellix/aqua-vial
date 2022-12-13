@@ -616,74 +616,96 @@ schedule_interval => INTERVAL '${schedInterval}');`
     private async _storeSignatures(signatures: string[], slots: { [tx: string]: number }, market: string) {
         signatures.reverse()
         for (const sig of signatures) {
-            await this._sqlClient.query(
-                "INSERT INTO solana_market_transaction (transaction_id, market_id, slot) VALUES (solana_tx_id($1), solana_account_id($2), $3) ON CONFLICT DO NOTHING;",
-                [
-                    sig,
-                    market,
-                    slots[sig] as number,
-                ], [
-                    DataType.Varchar,
-                    DataType.Varchar,
-                    DataType.Int8,
-                ]
-            )
+            try {
+                if (sig.length > 0) {
+                    await this._sqlClient.query(
+                        "INSERT INTO solana_market_transaction (transaction_id, market_id, slot) VALUES (solana_tx_id($1), solana_account_id($2), $3) ON CONFLICT DO NOTHING;",
+                        [
+                            sig,
+                            market,
+                            slots[sig] as number,
+                        ], [
+                            DataType.Varchar,
+                            DataType.Varchar,
+                            DataType.Int8,
+                        ]
+                    )
+                }
+            } catch (error) {
+                logger.log('error', `Store Sig: ${sig} Error: ${error}`)
+            }
         }
     }
 
     private async _storeEventRef(event: EventItem, market: string, program: string, dkey: string, user: string) {
-        await this._sqlClient.query(
-            "INSERT INTO solana_market_ref (transaction_id, log_index, market_id, program_id, user_id, data_key, event_name) VALUES (solana_tx_id($1), $2, solana_account_id($3), solana_account_id($4), solana_account_id($5), $6, $7) ON CONFLICT DO NOTHING;",
-            [
-                event.tx,
-                event.index,
-                market,
-                program,
-                user,
-                dkey,
-                event.event,
-            ], [
-                DataType.Varchar,
-                DataType.Int4,
-                DataType.Varchar,
-                DataType.Varchar,
-                DataType.Varchar,
-                DataType.Varchar,
-                DataType.Varchar,
-            ]
-        )
+        try {
+            await this._sqlClient.query(
+                "INSERT INTO solana_market_ref (transaction_id, log_index, market_id, program_id, user_id, data_key, event_name) VALUES (solana_tx_id($1), $2, solana_account_id($3), solana_account_id($4), solana_account_id($5), $6, $7) ON CONFLICT DO NOTHING",
+                [
+                    event.tx,
+                    event.index,
+                    market,
+                    program,
+                    user,
+                    dkey,
+                    event.event,
+                ], [
+                    DataType.Varchar,
+                    DataType.Int4,
+                    DataType.Varchar,
+                    DataType.Varchar,
+                    DataType.Varchar,
+                    DataType.Varchar,
+                    DataType.Varchar,
+                ]
+            )
+        } catch (error) {
+            logger.log('error', `Store Event Ref: ${event.tx}-${event.index}-${dkey} Error: ${error}`)
+        }
     }
 
     private async _storeEvents(events: EventItem[], market: string, program: string) {
         events.reverse()
         for (const event of events) {
-            await this._sqlClient.query(
-                "INSERT INTO solana_market_event (transaction_id, log_index, market_id, slot, program_id, event_name, event_data) VALUES (solana_tx_id($1), $2, solana_account_id($3), $4, solana_account_id($5), $6, $7) ON CONFLICT DO NOTHING;",
-                [
-                    event.tx,
-                    event.index,
-                    market,
-                    event.slot,
-                    program,
-                    event.event,
-                    event.data,
-                ], [
-                    DataType.Varchar,
-                    DataType.Int4,
-                    DataType.Varchar,
-                    DataType.Int8,
-                    DataType.Varchar,
-                    DataType.Varchar,
-                    DataType.Json,
-                ]
-            )
+            try {
+                await this._sqlClient.query(
+                    "INSERT INTO solana_market_event (transaction_id, log_index, market_id, slot, program_id, event_name, event_data) VALUES (solana_tx_id($1), $2, solana_account_id($3), $4, solana_account_id($5), $6, $7) ON CONFLICT DO NOTHING;",
+                    [
+                        event.tx,
+                        event.index,
+                        market,
+                        event.slot,
+                        program,
+                        event.event,
+                        event.data,
+                    ], [
+                        DataType.Varchar,
+                        DataType.Int4,
+                        DataType.Varchar,
+                        DataType.Int8,
+                        DataType.Varchar,
+                        DataType.Varchar,
+                        DataType.Json,
+                    ]
+                )
+            } catch (error) {
+                logger.log('error', `Store Event: ${event.tx}-${event.index} Error: ${error}`)
+            }
             if (event.event === 'OrderEvent') {
-                this._storeEventRef(event, market, program, 'user', event.data.user)
+                await this._storeEventRef(event, market, program, 'user', event.data.user)
             } else if (event.event === 'SettleEvent') {
-                this._storeEventRef(event, market, program, 'owner', event.data.owner)
+                await this._storeEventRef(event, market, program, 'owner', event.data.owner)
             } else if (event.event === 'MatchEvent') {
-                this._storeEventRef(event, market, program, 'maker', event.data.maker)
-                this._storeEventRef(event, market, program, 'taker', event.data.taker)
+                await this._storeEventRef(event, market, program, 'maker', event.data.maker)
+                await this._storeEventRef(event, market, program, 'taker', event.data.taker)
+            } else if (event.event === 'WithdrawEvent') {
+                await this._storeEventRef(event, market, program, 'user', event.data.user)
+                await this._storeEventRef(event, market, program, 'owner', event.data.owner)
+            } else if (event.event === 'VaultWithdrawEvent') {
+                await this._storeEventRef(event, market, program, 'user', event.data.user)
+                await this._storeEventRef(event, market, program, 'owner', event.data.owner)
+            } else if (event.event === 'VaultDepositEvent') {
+                await this._storeEventRef(event, market, program, 'owner', event.data.owner)
             }
         }
     }
@@ -738,13 +760,15 @@ schedule_interval => INTERVAL '${schedInterval}');`
                 }
             }
             if (message.type === 'event') {
-                logger.log('debug', `Get Signatures For Address: ${message.payload.state}`)
                 this._getLastSignature(message.market).then((lastSig) => {
                     var sigOpts: any = {}
                     if (lastSig) {
                         sigOpts['until'] = lastSig
+                        logger.log('debug', `Get Signatures: ${message.payload.market} Until: ${lastSig}`)
+                    } else {
+                        logger.log('debug', `Get Signatures: ${message.payload.market}`)
                     }
-                    this.provider.connection.getSignaturesForAddress(new PublicKey(message.payload.state), sigOpts, 'confirmed').then((csi: any) => {
+                    this.provider.connection.getSignaturesForAddress(new PublicKey(message.payload.market), sigOpts, 'confirmed').then((csi: any) => {
                         var txlist: string[] = []
                         for (const item of csi) {
                             txlist.push(item.signature)
@@ -756,6 +780,11 @@ schedule_interval => INTERVAL '${schedInterval}');`
                             for (var i = 0; i < trl.length; i++) {
                                 logger.log('debug', `Sig: ${txlist[i]}`)
                                 if (trl[i]) {
+                                    if (trl[i]?.meta?.err) {
+                                        logger.log('debug', `Sig: ${txlist[i]} Error`)
+                                        txlist[i] = ''
+                                        continue
+                                    }
                                     const slot = trl[i]?.slot
                                     slots[txlist[i] as string] = slot as number
                                     const logs: string[] = trl[i]?.meta?.logMessages as string[]
@@ -784,11 +813,12 @@ schedule_interval => INTERVAL '${schedInterval}');`
                                 }
                             }
                             this._storeSignatures(txlist, slots, message.market).then(() => {
-                                logger.log('debug', `Stored Signatures`)
+                                logger.log('debug', `Stored Signatures: ${txlist.length}`)
                             })
                             this._storeEvents(eventList, message.market, program).then(() => {
-                                const evdata = JSON.stringify(eventList, null, 4)
-                                logger.log('debug', `Stored Events: ${evdata}`)
+                                //const evdata = JSON.stringify(eventList, null, 4)
+                                //logger.log('debug', `Stored Events: ${evdata}`)
+                                logger.log('debug', `Stored Events: ${eventList.length}`)
                             })
                         })
                     })

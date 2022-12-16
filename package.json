@@ -39,6 +39,7 @@
   "license": "MPL-2.0",
   "dependencies": {
     "@blockworks-foundation/mango-client": "^3.3.18",
+    "@metaplex-foundation/mpl-token-metadata": "^2.5.2",
     "@project-serum/anchor": "github:mfrager/anchor-ts",
     "@project-serum/serum": "^0.13.65",
     "@solana/buffer-layout": "^4.0.0",

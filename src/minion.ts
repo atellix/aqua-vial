@@ -1,10 +1,12 @@
 import path from 'path'
+import fetch from 'node-fetch'
 import { getLayoutVersion, Market } from '@project-serum/serum'
 import { Connection, PublicKey } from '@solana/web3.js'
 import { Client, DataType } from 'ts-postgres'
 import { App, HttpRequest, HttpResponse, DISABLED, SSLApp, TemplatedApp, us_listen_socket_close, WebSocket } from 'uWebSockets.js'
 import { isMainThread, threadId, workerData } from 'worker_threads'
 import { AnchorProvider, Program, BorshAccountsCoder, EventParser } from '@project-serum/anchor'
+import { Metadata, PROGRAM_ID as METAPLEX_PROGRAM_ID } from '@metaplex-foundation/mpl-token-metadata'
 import { DateTime } from 'luxon'
 import { CHANNELS, MESSAGE_TYPES_PER_CHANNEL, OPS } from './consts'
 import {
@@ -97,6 +99,7 @@ class Minion {
     private readonly _quotesSerialized: { [market: string]: string } = {}
     private readonly _marketNames: string[]
     private _marketBase32: { [market: string]: string } = {}
+    private _marketInfo: { [market: string]: any } = {}
     private _listenSocket: any | undefined = undefined
     private _openConnectionsCount = 0
     private _tid: NodeJS.Timeout | undefined = undefined
@@ -118,6 +121,8 @@ class Minion {
             var pk = new PublicKey(m.address)
             var encoder = new base32.Encoder({ type: "crockford", lc: true })
             this._marketBase32[m.address] = 'm' + encoder.write(new Uint8Array(pk.toBuffer().toJSON().data)).finalize()
+            this._marketInfo[m.address] = { metadata: {}, ...m }
+            this.initMarketInfoCache(m.address, JSON.stringify(this._marketInfo[m.address]))
         })
         this._server = this._initServer()
         this._sqlClient = new Client({
@@ -180,6 +185,11 @@ class Minion {
             })
             .post(`${apiPrefix}/market_list`, this._getMarketList)
             .options(`${apiPrefix}/market_list`, (res) => {
+                this._setCorsHeaders(res)
+                res.end()
+            })
+            .post(`${apiPrefix}/market_info`, this._getMarketInfo)
+            .options(`${apiPrefix}/market_info`, (res) => {
                 this._setCorsHeaders(res)
                 res.end()
             })
@@ -314,6 +324,72 @@ schedule_interval => INTERVAL '${schedInterval}');`
                 lastId: lastId,
             }
             aquaStatusChannel.postMessage(lastTradeId)
+        })
+    }
+
+    private async _programAddress(inputs: Buffer[], program: PublicKey) {
+        const addr = await PublicKey.findProgramAddress(inputs, program)
+        const res = { 'pubkey': await addr[0].toString(), 'nonce': addr[1] }
+        return res
+    }
+
+    private async _getTokenMetadata(mintPK: PublicKey) {
+        const dataAddr = await this._programAddress([
+            Buffer.from('metadata'),
+            METAPLEX_PROGRAM_ID.toBuffer(),
+            mintPK.toBuffer(),
+        ], METAPLEX_PROGRAM_ID)
+        try {
+            const meta = await Metadata.fromAccountAddress(this.provider.connection, new PublicKey(dataAddr.pubkey))
+            var name = meta.data.name
+            var symbol = meta.data.symbol
+            var uri = meta.data.uri
+            name = name.replace(/\x00/g, '')
+            symbol = symbol.replace(/\x00/g, '')
+            uri = uri.replace(/\x00/g, '')
+            const spec = {
+                'name': name,
+                'symbol': symbol,
+                'uri': uri,
+            }
+            return spec
+        } catch {
+            return null
+        }
+    }
+
+    public async getMarketMetadata() {
+        await this._markets.map(async (m: AquaMarket) => {
+            const marketInfo = this._marketInfo[m.address]
+            const marketPK = new PublicKey(m.address)
+            const marketData = await this._aquaProgram.account?.market?.fetch(marketPK)
+            //logger.log('debug', 'Market Data ' + JSON.stringify(marketData))
+            const mktMint = marketData?.mktMint
+            const prcMint = marketData?.prcMint
+            //logger.log('debug', 'Market Info ' + JSON.stringify(marketInfo))
+            marketInfo.metadata.mktMint = mktMint
+            marketInfo.metadata.prcMint = prcMint
+            var mktTokenMeta = await this._getTokenMetadata(mktMint as PublicKey)
+            var prcTokenMeta = await this._getTokenMetadata(prcMint as PublicKey)
+            //logger.log('debug', 'Market Token Meta ' + JSON.stringify(mktTokenMeta))
+            //logger.log('debug', 'Pricing Token Meta ' + JSON.stringify(prcTokenMeta))
+            if (mktTokenMeta) {
+                try {
+                    const resp = await fetch(mktTokenMeta.uri)
+                    const tdata = await resp.json()
+                    mktTokenMeta = { ...mktTokenMeta, ...tdata }
+                } catch {}
+                marketInfo.metadata.mktTokenMeta = mktTokenMeta
+            }
+            if (prcTokenMeta) {
+                try {
+                    const resp = await fetch(prcTokenMeta.uri)
+                    const tdata = await resp.json()
+                    prcTokenMeta = { ...prcTokenMeta, ...tdata }
+                } catch {}
+                marketInfo.metadata.prcTokenMeta = prcTokenMeta
+            }
+            this.initMarketInfoCache(m.address, JSON.stringify(marketInfo))
         })
     }
 
@@ -596,9 +672,15 @@ schedule_interval => INTERVAL '${schedInterval}');`
     }
 
     private _cachedListMarketsResponse: string | undefined = undefined
+    private _cachedMarketInfoResponse: { [market: string]: any } = {}
 
     public initMarketsCache(cachedResponse: string) {
         this._cachedListMarketsResponse = cachedResponse
+        logger.log('info', 'Cached markets info response', meta)
+    }
+
+    public initMarketInfoCache(market: string, cachedResponse: string) {
+        this._cachedMarketInfoResponse[market] = cachedResponse
         logger.log('info', 'Cached markets info response', meta)
     }
 
@@ -612,6 +694,26 @@ schedule_interval => INTERVAL '${schedInterval}');`
             res.writeHeader('Content-Type', 'application/json')
             this._setCorsHeaders(res)
             res.end(this._cachedListMarketsResponse)
+        }
+    }
+
+    private _getMarketInfo = async (res: HttpResponse) => {
+        res.onAborted(() => {
+            res.aborted = true
+        })
+        var resp = null
+        var rdata: any = await this._getData(res)
+        if ('market' in rdata) {
+            resp = this._cachedMarketInfoResponse[rdata.market]
+        } else {
+            logger.log('debug', 'Market parameter not found')
+            return this._abortRequest(res, 404)
+        }
+        if (!res.aborted) {
+            res.writeStatus('200 OK')
+            res.writeHeader('Content-Type', 'application/json')
+            this._setCorsHeaders(res)
+            res.end(resp)
         }
     }
 
@@ -1062,19 +1164,15 @@ minion.start(port).then(async () => {
 
     aquaDataChannel.onmessage = (message) => {
         lastPublishTimestamp = new Date()
-
         minion.processMessages(message.data)
     }
-
-    //aquaMarketsChannel.onmessage = (message) => {
-    //    minion.initMarketsCache(message.data)
-    //}
 
     marketInitChannel.onmessage = async () => {
         await minion.initMarkets()
     }
 
     minionReadyChannel.postMessage('ready')
+    await minion.getMarketMetadata()
 })
 
 cleanupChannel.onmessage = async () => {

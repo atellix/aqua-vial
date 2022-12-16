@@ -1,10 +1,10 @@
 [
     {
-        "address": "FbptMDz6ZGMQSSwtdL3YG4HdBWcUApYZfySjweEXm8Zz",
+        "address": "CjJPkSRKaXnNVhGB6yLjNmG2HcgdDotJHs3t23wxubPZ",
         "programId": "AQUAvuZCFUGtSc8uQBaTXfJz3YjMUbinMeXDoDQmZLvX",
-        "name": "ATLX / USDC",
-        "subtitle": "Atellix / USD Coin",
-        "description": "Atellix.Network: Building next-generation markets on blockchain. Creators of Virtual USD, the AquaDEX protocol, and AtellixPay. The ATLX token is the governance token for the Atellix DAO. See terms and conditions for details.",
+        "name": "SOL / USDV",
+        "subtitle": "Solana SOL / Virtual USD",
+        "description": "Solana SOL spot market in Virtual USD",
         "image": "/atellix/ATLX-token-1.png",
         "deprecated": false
     },

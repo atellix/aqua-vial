@@ -64,8 +64,6 @@ const RateLimit = (limit: number, interval: number) => {
     }
 }
 
-//type TPromiseObjectNull = Promise<{ [key: string]: any } | null>
-
 type EventItem = {
     readonly tx: string
     readonly index: number
@@ -92,6 +90,19 @@ class Minion {
     private readonly _wsMessagesRateLimit: (ws: any) => boolean = RateLimit(this.MAX_MESSAGES_PER_SECOND, 1000)
 
     private _sqlClient: Client
+
+    private readonly _defaultToken: { [mint: string]: any } = {
+        'So11111111111111111111111111111111111111112': {
+            'name': 'Solana ◎',
+            'symbol': 'SOL',
+            'image': 'https://s2.coinmarketcap.com/static/img/coins/128x128/5426.png',
+        },
+        'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr': {
+            'name': 'USD Coin (dev)',
+            'symbol': 'USDC',
+            'image': 'https://s2.coinmarketcap.com/static/img/coins/128x128/3408.png',
+        },
+    }
 
     private readonly _l2SnapshotsSerialized: { [market: string]: string } = {}
     private readonly _l3SnapshotsSerialized: { [market: string]: string } = {}
@@ -354,6 +365,10 @@ schedule_interval => INTERVAL '${schedInterval}');`
             }
             return spec
         } catch {
+            const mint = mintPK.toString()
+            if (mint in this._defaultToken) {
+                return this._defaultToken[mint]
+            }
             return null
         }
     }
@@ -364,31 +379,37 @@ schedule_interval => INTERVAL '${schedInterval}');`
             const marketPK = new PublicKey(m.address)
             const marketData = await this._aquaProgram.account?.market?.fetch(marketPK)
             //logger.log('debug', 'Market Data ' + JSON.stringify(marketData))
-            const mktMint = marketData?.mktMint
-            const prcMint = marketData?.prcMint
+            const mktMint = marketData?.mktMint as PublicKey
+            const prcMint = marketData?.prcMint as PublicKey
             //logger.log('debug', 'Market Info ' + JSON.stringify(marketInfo))
-            marketInfo.metadata.mktMint = mktMint
-            marketInfo.metadata.prcMint = prcMint
-            var mktTokenMeta = await this._getTokenMetadata(mktMint as PublicKey)
-            var prcTokenMeta = await this._getTokenMetadata(prcMint as PublicKey)
+            var mktTokenMeta = await this._getTokenMetadata(mktMint)
+            var prcTokenMeta = await this._getTokenMetadata(prcMint)
             //logger.log('debug', 'Market Token Meta ' + JSON.stringify(mktTokenMeta))
             //logger.log('debug', 'Pricing Token Meta ' + JSON.stringify(prcTokenMeta))
+            marketInfo.metadata.marketToken = {}
+            marketInfo.metadata.pricingToken = {}
             if (mktTokenMeta) {
-                try {
-                    const resp = await fetch(mktTokenMeta.uri)
-                    const tdata = await resp.json()
-                    mktTokenMeta = { ...mktTokenMeta, ...tdata }
-                } catch {}
-                marketInfo.metadata.mktTokenMeta = mktTokenMeta
+                if (mktTokenMeta.uri) {
+                    try {
+                        const resp = await fetch(mktTokenMeta.uri)
+                        const tdata = await resp.json()
+                        mktTokenMeta = { ...mktTokenMeta, ...tdata }
+                    } catch {}
+                }
+                marketInfo.metadata.marketToken = mktTokenMeta
             }
             if (prcTokenMeta) {
-                try {
-                    const resp = await fetch(prcTokenMeta.uri)
-                    const tdata = await resp.json()
-                    prcTokenMeta = { ...prcTokenMeta, ...tdata }
-                } catch {}
-                marketInfo.metadata.prcTokenMeta = prcTokenMeta
+                if (prcTokenMeta.uri) {
+                    try {
+                        const resp = await fetch(prcTokenMeta.uri)
+                        const tdata = await resp.json()
+                        prcTokenMeta = { ...prcTokenMeta, ...tdata }
+                    } catch {}
+                }
+                marketInfo.metadata.pricingToken = prcTokenMeta
             }
+            marketInfo.metadata.marketToken.mint = mktMint.toString()
+            marketInfo.metadata.pricingToken.mint = prcMint.toString()
             this.initMarketInfoCache(m.address, JSON.stringify(marketInfo))
         })
     }

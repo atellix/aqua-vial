@@ -15,7 +15,7 @@ import {
     marketInitChannel,
     minionReadyChannel,
     aquaDataChannel,
-    aquaMarketsChannel,
+    //aquaMarketsChannel,
     aquaStatusChannel,
     wait
 } from './helpers'
@@ -127,11 +127,10 @@ class Minion {
             database: process.env.POSTGRES_DATABASE,
             password: process.env.POSTGRES_PASSWORD,
         })
-
         this._tid = setInterval(() => {
             logger.log('debug', `Open WS client connections count: ${this._openConnectionsCount}`, meta)
         }, 60 * 1000)
-
+        this.initMarketsCache(JSON.stringify(_markets))
     }
 
     private _initServer() {
@@ -176,6 +175,11 @@ class Minion {
             })
             .post(`${apiPrefix}/trades`, this._getTradeList)
             .options(`${apiPrefix}/trades`, (res) => {
+                this._setCorsHeaders(res)
+                res.end()
+            })
+            .post(`${apiPrefix}/market_list`, this._getMarketList)
+            .options(`${apiPrefix}/market_list`, (res) => {
                 this._setCorsHeaders(res)
                 res.end()
             })
@@ -593,24 +597,22 @@ schedule_interval => INTERVAL '${schedInterval}');`
 
     private _cachedListMarketsResponse: string | undefined = undefined
 
-    //async based on https://github.com/uNetworking/uWebSockets.js/blob/master/examples/AsyncFunction.js
-    private _listMarkets = async (res: HttpResponse) => {
-        res.onAborted(() => {
-            res.aborted = true
-        })
-
-        await wait(1)
-
-        if (!res.aborted) {
-            res.writeStatus('200 OK')
-            res.writeHeader('Content-Type', 'application/json')
-            res.end(this._cachedListMarketsResponse)
-        }
-    }
-
     public initMarketsCache(cachedResponse: string) {
         this._cachedListMarketsResponse = cachedResponse
         logger.log('info', 'Cached markets info response', meta)
+    }
+
+    //async based on https://github.com/uNetworking/uWebSockets.js/blob/master/examples/AsyncFunction.js
+    private _getMarketList = async (res: HttpResponse) => {
+        res.onAborted(() => {
+            res.aborted = true
+        })
+        if (!res.aborted) {
+            res.writeStatus('200 OK')
+            res.writeHeader('Content-Type', 'application/json')
+            this._setCorsHeaders(res)
+            res.end(this._cachedListMarketsResponse)
+        }
     }
 
     private async _storeSignatures(signatures: string[], slots: { [tx: string]: number }, market: string) {
@@ -1064,9 +1066,9 @@ minion.start(port).then(async () => {
         minion.processMessages(message.data)
     }
 
-    aquaMarketsChannel.onmessage = (message) => {
-        minion.initMarketsCache(message.data)
-    }
+    //aquaMarketsChannel.onmessage = (message) => {
+    //    minion.initMarketsCache(message.data)
+    //}
 
     marketInitChannel.onmessage = async () => {
         await minion.initMarkets()

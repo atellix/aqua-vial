@@ -75,18 +75,18 @@ const argv = yargs
 const port = process.env.PORT ? +process.env.PORT : argv['port']
 process.env.LOG_LEVEL = argv['log-level']
 
-const { bootServer, logger, getDefaultMarkets } = require('../dist')
+const { bootServer, logger } = require('../dist')
 
 async function start() {
-    let markets = getDefaultMarkets()
     const marketsJsonPath = argv['markets-json']
     if (marketsJsonPath) {
         try {
             const fullPath = path.join(process.cwd(), argv['markets-json'])
             markets = require(fullPath)
-            logger.log('info', `Loaded custom markets from ${fullPath}`)
-        } catch {
-            markets = getDefaultMarkets()
+            logger.log('info', `Loaded markets from ${fullPath}`)
+        } catch (error) {
+            logger.log('error', `Required parameter --markets-json=<FILE> not found or invalid JSON file: ${error}`)
+            process.exit(1)
         }
     }
 

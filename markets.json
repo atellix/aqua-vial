@@ -1,8 +1,21 @@
 [
-  {
-    "address": "FbptMDz6ZGMQSSwtdL3YG4HdBWcUApYZfySjweEXm8Zz",
-    "deprecated": false,
-    "name": "SOL/USDC",
-    "programId": "AQUAvuZCFUGtSc8uQBaTXfJz3YjMUbinMeXDoDQmZLvX"
-  }
+    {
+        "address": "FbptMDz6ZGMQSSwtdL3YG4HdBWcUApYZfySjweEXm8Zz",
+        "programId": "AQUAvuZCFUGtSc8uQBaTXfJz3YjMUbinMeXDoDQmZLvX",
+        "name": "ATLX / USDC",
+        "subtitle": "Atellix / USD Coin",
+        "description": "Atellix.Network: Building next-generation markets on blockchain. Creators of Virtual USD, the AquaDEX protocol, and AtellixPay. The ATLX token is the governance token for the Atellix DAO. See terms and conditions for details.",
+        "image": "/atellix/ATLX-token-1.png",
+        "deprecated": false
+    },
+    {
+        "address": "FbptMDz6ZGMQSSwtdL3YG4HdBWcUApYZfySjweEXm8Zz",
+        "programId": "AQUAvuZCFUGtSc8uQBaTXfJz3YjMUbinMeXDoDQmZLvX",
+        "name": "SOL / USDC",
+        "subtitle": "Solana SOL / USD Coin",
+        "coingecko": "www.coingecko.com/en/coins/solana",
+        "description": "Solana SOL spot market",
+        "image": "/atellix/SOL-token-1.png",
+        "deprecated": false
+    }
 ]

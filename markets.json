@@ -17,5 +17,14 @@
         "description": "Solana SOL spot market",
         "image": "/atellix/SOL-token-1.png",
         "deprecated": false
+    },
+    {
+        "address": "9A8Afb5poB9tZ2B1fBivTNBViu9WVkhDAtT1h9EaGZrJ",
+        "programId": "AQUAvuZCFUGtSc8uQBaTXfJz3YjMUbinMeXDoDQmZLvX",
+        "name": "Token A1 / Token B1",
+        "subtitle": "A1 / B1",
+        "description": "Market 3",
+        "image": "/atellix/GENERIC-token-1.png",
+        "deprecated": false
     }
 ]

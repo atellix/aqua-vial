@@ -886,7 +886,9 @@ schedule_interval => INTERVAL '${schedInterval}');`
             }
             if (message.type === 'event') {
                 this._getLastSignature(message.market).then((lastSig) => {
-                    var sigOpts: any = {}
+                    var sigOpts: any = {
+                        limit: 200,
+                    }
                     if (lastSig) {
                         sigOpts['until'] = lastSig
                         logger.log('debug', `Get Signatures: ${message.payload.market} Until: ${lastSig}`)

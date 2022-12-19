@@ -1,10 +1,17 @@
 from node:16-slim
-# version arg contains current git tag
-ARG VERSION_ARG
-# install git
-RUN apt-get update && apt-get install -y git
 
-# install serum-vial globally (exposes serum-vial command)
-RUN npm install --global --unsafe-perm serum-vial@$VERSION_ARG
-# run it
-CMD serum-vial
+RUN apt-get update && apt-get install -y git
+RUN mkdir -p /usr/local/aqua-vial/idl
+RUN mkdir -p /usr/local/aqua-vial/src
+RUN mkdir -p /usr/local/aqua-vial/bin
+COPY idl/ /usr/local/aqua-vial/idl
+COPY src/ /usr/local/aqua-vial/src
+COPY bin/ /usr/local/aqua-vial/bin
+COPY package.json /usr/local/aqua-vial/package.json
+COPY package-lock.json /usr/local/aqua-vial/package-lock.json
+COPY tsconfig.json /usr/local/aqua-vial/tsconfig.json
+COPY markets.json /usr/local/aqua-vial/markets.json
+WORKDIR /usr/local/aqua-vial
+RUN npm install
+CMD node bin/aqua-vial.js --log-level=debug --markets-json=/usr/local/aqua-vial/markets.json
+

@@ -13,5 +13,5 @@ COPY tsconfig.json /usr/local/aqua-vial/tsconfig.json
 COPY markets.json /usr/local/aqua-vial/markets.json
 WORKDIR /usr/local/aqua-vial
 RUN npm install
-CMD node bin/aqua-vial.js --log-level=debug --markets-json=/usr/local/aqua-vial/markets.json
+CMD node bin/aqua-vial.js --log-level=debug --markets-json=markets.json
 

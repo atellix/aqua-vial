@@ -3,6 +3,68 @@
   "name": "aqua_dex",
   "instructions": [
     {
+      "name": "initialize",
+      "accounts": [
+        {
+          "name": "rootData",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authData",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programAdmin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deactivate",
+      "accounts": [
+        {
+          "name": "rootData",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programAdmin",
+          "isMut": true,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "storeMetadata",
       "accounts": [
         {
@@ -51,6 +113,96 @@
         {
           "name": "inpVerifyUrl",
           "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "grant",
+      "accounts": [
+        {
+          "name": "rootData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authData",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programAdmin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "rbacUser",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "inpRootNonce",
+          "type": "u8"
+        },
+        {
+          "name": "inpRole",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "revoke",
+      "accounts": [
+        {
+          "name": "rootData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authData",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "program",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "programAdmin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "rbacUser",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "inpRootNonce",
+          "type": "u8"
+        },
+        {
+          "name": "inpRole",
+          "type": "u32"
         }
       ]
     },
@@ -331,7 +483,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "limitAsk",
@@ -436,7 +591,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "marketBid",
@@ -537,7 +695,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "marketAsk",
@@ -638,7 +799,10 @@
           "name": "inpRollover",
           "type": "bool"
         }
-      ]
+      ],
+      "returns": {
+        "defined": "TradeResult"
+      }
     },
     {
       "name": "cancelOrder",
@@ -995,7 +1159,10 @@
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [],
+      "returns": {
+        "defined": "LogStatusResult"
+      }
     },
     {
       "name": "managerTransferSol",
@@ -1040,6 +1207,16 @@
       "name": "managerWithdrawFees",
       "accounts": [
         {
+          "name": "rootData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authData",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
           "name": "market",
           "isMut": false,
           "isSigner": false
@@ -1080,7 +1257,8 @@
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [],
+      "returns": "u64"
     },
     {
       "name": "managerUpdateMarket",
@@ -1601,10 +1779,6 @@
             "type": "u64"
           },
           {
-            "name": "tradeCounter",
-            "type": "u64"
-          },
-          {
             "name": "orderCounter",
             "type": "u64"
           },
@@ -1754,6 +1928,18 @@
           }
         ]
       }
+    },
+    {
+      "name": "RootData",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "rootAuthority",
+            "type": "publicKey"
+          }
+        ]
+      }
     }
   ],
   "types": [
@@ -1807,6 +1993,40 @@
           },
           {
             "name": "Account"
+          },
+          {
+            "name": "UserRBACMap"
+          },
+          {
+            "name": "UserRBAC"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Role",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "NetworkAdmin"
+          },
+          {
+            "name": "FeeManager"
+          }
+        ]
+      }
+    },
+    {
+      "name": "UserDT",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "UserRBACMap"
+          },
+          {
+            "name": "UserRBAC"
           }
         ]
       }
@@ -1841,74 +2061,6 @@
           },
           {
             "name": "Account"
-          }
-        ]
-      }
-    },
-    {
-      "name": "ErrorCode",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "AccessDenied"
-          },
-          {
-            "name": "TokenAccountFrozen"
-          },
-          {
-            "name": "InsufficientTokens"
-          },
-          {
-            "name": "MarketClosed"
-          },
-          {
-            "name": "AccountNotFound"
-          },
-          {
-            "name": "RecordNotFound"
-          },
-          {
-            "name": "OrderNotFound"
-          },
-          {
-            "name": "InvalidParameters"
-          },
-          {
-            "name": "InvalidAccount"
-          },
-          {
-            "name": "InvalidDerivedAccount"
-          },
-          {
-            "name": "VaultNotEmpty"
-          },
-          {
-            "name": "OrderNotFilled"
-          },
-          {
-            "name": "InternalError"
-          },
-          {
-            "name": "ExternalError"
-          },
-          {
-            "name": "SettlementLogFull"
-          },
-          {
-            "name": "SettlementLogNotEmpty"
-          },
-          {
-            "name": "OrderbookFull"
-          },
-          {
-            "name": "RetrySettlementAccount"
-          },
-          {
-            "name": "QuantityBelowMinimum"
-          },
-          {
-            "name": "Overflow"
           }
         ]
       }
@@ -2399,6 +2551,108 @@
           "index": false
         }
       ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "AccessDenied",
+      "msg": "Access denied"
+    },
+    {
+      "code": 6001,
+      "name": "TokenAccountFrozen",
+      "msg": "Token account frozen"
+    },
+    {
+      "code": 6002,
+      "name": "InsufficientTokens",
+      "msg": "Insufficient tokens"
+    },
+    {
+      "code": 6003,
+      "name": "MarketClosed",
+      "msg": "Market closed"
+    },
+    {
+      "code": 6004,
+      "name": "AccountNotFound",
+      "msg": "Account not found"
+    },
+    {
+      "code": 6005,
+      "name": "RecordNotFound",
+      "msg": "Record not found"
+    },
+    {
+      "code": 6006,
+      "name": "OrderNotFound",
+      "msg": "Order not found"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidParameters",
+      "msg": "Invalid parameters"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidAccount",
+      "msg": "Invalid account"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidDerivedAccount",
+      "msg": "Invalid derived account"
+    },
+    {
+      "code": 6010,
+      "name": "VaultNotEmpty",
+      "msg": "Vault not empty"
+    },
+    {
+      "code": 6011,
+      "name": "OrderNotFilled",
+      "msg": "Order not filled"
+    },
+    {
+      "code": 6012,
+      "name": "InternalError",
+      "msg": "Internal error"
+    },
+    {
+      "code": 6013,
+      "name": "ExternalError",
+      "msg": "External error"
+    },
+    {
+      "code": 6014,
+      "name": "SettlementLogFull",
+      "msg": "Settlement log full"
+    },
+    {
+      "code": 6015,
+      "name": "SettlementLogNotEmpty",
+      "msg": "Settlement log not empty"
+    },
+    {
+      "code": 6016,
+      "name": "OrderbookFull",
+      "msg": "Orderbook full"
+    },
+    {
+      "code": 6017,
+      "name": "RetrySettlementAccount",
+      "msg": "Settlement log account does not match market, please update market data and retry"
+    },
+    {
+      "code": 6018,
+      "name": "QuantityBelowMinimum",
+      "msg": "Quantity below minimum"
+    },
+    {
+      "code": 6019,
+      "name": "Overflow",
+      "msg": "Overflow"
     }
   ],
   "metadata": {

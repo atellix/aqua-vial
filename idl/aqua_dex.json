@@ -351,11 +351,19 @@
           "type": "i64"
         },
         {
+          "name": "inpExpireDefault",
+          "type": "i64"
+        },
+        {
           "name": "inpMinQuantity",
           "type": "u64"
         },
         {
           "name": "inpTakerFee",
+          "type": "u32"
+        },
+        {
+          "name": "inpMakerRebate",
           "type": "u32"
         },
         {
@@ -1303,11 +1311,19 @@
           "type": "i64"
         },
         {
+          "name": "inpExpireDefault",
+          "type": "i64"
+        },
+        {
           "name": "inpMinQuantity",
           "type": "u64"
         },
         {
           "name": "inpTakerFee",
+          "type": "u32"
+        },
+        {
+          "name": "inpMakerRebate",
           "type": "u32"
         },
         {
@@ -1647,6 +1663,10 @@
             "type": "i64"
           },
           {
+            "name": "expireDefault",
+            "type": "i64"
+          },
+          {
             "name": "minQuantity",
             "type": "u64"
           },
@@ -1664,6 +1684,10 @@
           },
           {
             "name": "takerFee",
+            "type": "u32"
+          },
+          {
+            "name": "makerRebate",
             "type": "u32"
           },
           {

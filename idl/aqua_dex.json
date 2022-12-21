@@ -2125,6 +2125,11 @@
           "index": false
         },
         {
+          "name": "makerRebate",
+          "type": "u64",
+          "index": false
+        },
+        {
           "name": "maker",
           "type": "publicKey",
           "index": false
@@ -2670,11 +2675,16 @@
     },
     {
       "code": 6018,
+      "name": "RebateExceedsFee",
+      "msg": "Rebate exceeds fee"
+    },
+    {
+      "code": 6019,
       "name": "QuantityBelowMinimum",
       "msg": "Quantity below minimum"
     },
     {
-      "code": 6019,
+      "code": 6020,
       "name": "Overflow",
       "msg": "Overflow"
     }

@@ -351,10 +351,6 @@
           "type": "i64"
         },
         {
-          "name": "inpExpireDefault",
-          "type": "i64"
-        },
-        {
           "name": "inpMinQuantity",
           "type": "u64"
         },
@@ -1311,10 +1307,6 @@
           "type": "i64"
         },
         {
-          "name": "inpExpireDefault",
-          "type": "i64"
-        },
-        {
           "name": "inpMinQuantity",
           "type": "u64"
         },
@@ -1663,10 +1655,6 @@
             "type": "i64"
           },
           {
-            "name": "expireDefault",
-            "type": "i64"
-          },
-          {
             "name": "minQuantity",
             "type": "u64"
           },
@@ -1719,10 +1707,6 @@
             "type": "publicKey"
           },
           {
-            "name": "mktNonce",
-            "type": "u8"
-          },
-          {
             "name": "mktDecimals",
             "type": "u8"
           },
@@ -1737,10 +1721,6 @@
           {
             "name": "prcVault",
             "type": "publicKey"
-          },
-          {
-            "name": "prcNonce",
-            "type": "u8"
           },
           {
             "name": "prcDecimals",

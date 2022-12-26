@@ -335,11 +335,7 @@
           "type": "u8"
         },
         {
-          "name": "inpManagerWithdraw",
-          "type": "bool"
-        },
-        {
-          "name": "inpManagerCancel",
+          "name": "inpManagerActions",
           "type": "bool"
         },
         {
@@ -1639,11 +1635,7 @@
             "type": "bool"
           },
           {
-            "name": "managerWithdraw",
-            "type": "bool"
-          },
-          {
-            "name": "managerCancel",
+            "name": "managerActions",
             "type": "bool"
           },
           {
@@ -1763,6 +1755,10 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "market",
+            "type": "publicKey"
+          },
+          {
             "name": "settleA",
             "type": "publicKey"
           },
@@ -1788,11 +1784,11 @@
           },
           {
             "name": "activeBid",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "activeAsk",
-            "type": "u64"
+            "type": "u32"
           },
           {
             "name": "mktVaultBalance",

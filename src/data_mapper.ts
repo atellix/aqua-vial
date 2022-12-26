@@ -175,6 +175,7 @@ export class DataMapper {
         const instPerPage = Math.floor((16384 - (headerSize + offsetSize)) / stLogEntry.span)
         const stSlabVec = struct<LogSlabVec>([
             blob(offsetSize, 'offset'),
+            blob(32, 'market'),
             nu64('trade_count'),
             nu64('entry_max'),
             seq(stLogEntry, instPerPage, 'logs'),

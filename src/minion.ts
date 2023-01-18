@@ -102,6 +102,41 @@ class Minion {
             'symbol': 'USDC',
             'image': 'https://s2.coinmarketcap.com/static/img/coins/128x128/3408.png',
         },
+        'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': {
+            'name': 'USD Coin',
+            'symbol': 'USDC',
+            'image': 'https://s2.coinmarketcap.com/static/img/coins/128x128/3408.png',
+        },
+        'DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ': {
+            'name': 'DUST Protocol',
+            'symbol': 'DUST',
+            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ/logo.jpg',
+        },
+        'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE': {
+            'name': 'Orca',
+            'symbol': 'ORCA',
+            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE/logo.png',
+        },
+        '7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx': {
+            'name': 'STEPN Token',
+            'symbol': 'GMT',
+            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx/logo.png',
+        },
+        'G9tt98aYSznRk7jWsfuz9FnTdokxS6Brohdo9hSmjTRB': {
+            'name': 'PUFF',
+            'symbol': 'PUFF',
+            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/G9tt98aYSznRk7jWsfuz9FnTdokxS6Brohdo9hSmjTRB/logo.png',
+        },
+	'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1': {
+            'name': 'Blaze Staked SOL',
+            'symbol': 'bSOL',
+            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1/logo.png',
+	},
+	'9tzZzEHsKnwFL1A3DyFJwj36KnZj3gZ7g4srWp9YTEoh': {
+            'name': 'ARB Protocol',
+            'symbol': 'ARB',
+            'image': 'https://assets.coingecko.com/coins/images/26046/large/IMG_3600.png?1656916820',
+	},
     }
 
     private readonly _l2SnapshotsSerialized: { [market: string]: string } = {}
@@ -345,6 +380,10 @@ schedule_interval => INTERVAL '${schedInterval}');`
     }
 
     private async _getTokenMetadata(mintPK: PublicKey) {
+	const mint = mintPK.toString()
+	if (mint in this._defaultToken) {
+	    return this._defaultToken[mint]
+	}
         const dataAddr = await this._programAddress([
             Buffer.from('metadata'),
             METAPLEX_PROGRAM_ID.toBuffer(),
@@ -352,6 +391,8 @@ schedule_interval => INTERVAL '${schedInterval}');`
         ], METAPLEX_PROGRAM_ID)
         try {
             const meta = await Metadata.fromAccountAddress(this.provider.connection, new PublicKey(dataAddr.pubkey))
+	    var metaJson = JSON.stringify(meta)
+            logger.log('debug', `Token metadata for: ${dataAddr.pubkey} result: ${metaJson}`)
             var name = meta.data.name
             var symbol = meta.data.symbol
             var uri = meta.data.uri
@@ -896,58 +937,60 @@ schedule_interval => INTERVAL '${schedInterval}');`
                         logger.log('debug', `Get Signatures: ${message.payload.market}`)
                     }
                     this.provider.connection.getSignaturesForAddress(new PublicKey(message.payload.market), sigOpts, 'confirmed').then((csi: any) => {
-                        var txlist: string[] = []
-                        for (const item of csi) {
-                            txlist.push(item.signature)
-                        }
-                        this.provider.connection.getTransactions(txlist, {commitment: 'confirmed', maxSupportedTransactionVersion: 0}).then((trl) => {
-                            const program = this._aquaProgram.programId.toString()
-                            var eventList: EventItem[] = []
-                            var slots: { [tx: string]: number } = {}
-                            for (var i = 0; i < trl.length; i++) {
-                                logger.log('debug', `Sig: ${txlist[i]}`)
-                                if (trl[i]) {
-                                    if (trl[i]?.meta?.err) {
-                                        logger.log('debug', `Sig: ${txlist[i]} Error`)
-                                        txlist[i] = ''
-                                        continue
-                                    }
-                                    const slot = trl[i]?.slot
-                                    slots[txlist[i] as string] = slot as number
-                                    const logs: string[] = trl[i]?.meta?.logMessages as string[]
-                                    const sdata = JSON.stringify(logs, null, 4)
-                                    //logger.log('debug', `Sig Data: ${sdata}`)
-                                    const events = [...this._aquaEventParser.parseLogs(logs)]
-                                    for (var j = 0; j < events.length; j++) {
-                                        const ev = events[j]
-                                        if (ev) {
-                                            for (const k of Object.keys(ev.data)) {
-                                                const evrow = ev.data[k] as any
-                                                if (typeof evrow['toString'] === 'function') {
-                                                    ev.data[k] = evrow.toString()
+                        setTimeout(function(csi: any, thiz: Minion) {
+                            var txlist: string[] = []
+                            for (const item of csi) {
+                                txlist.push(item.signature)
+                            }
+                            thiz.provider.connection.getTransactions(txlist, {commitment: 'confirmed', maxSupportedTransactionVersion: 0}).then((trl) => {
+                                const program = thiz._aquaProgram.programId.toString()
+                                var eventList: EventItem[] = []
+                                var slots: { [tx: string]: number } = {}
+                                for (var i = 0; i < trl.length; i++) {
+                                    logger.log('debug', `Sig: ${txlist[i]}`)
+                                    if (trl[i]) {
+                                        if (trl[i]?.meta?.err) {
+                                            logger.log('debug', `Sig: ${txlist[i]} Error`)
+                                            txlist[i] = ''
+                                            continue
+                                        }
+                                        const slot = trl[i]?.slot
+                                        slots[txlist[i] as string] = slot as number
+                                        const logs: string[] = trl[i]?.meta?.logMessages as string[]
+                                        const sdata = JSON.stringify(logs, null, 4)
+                                        //logger.log('debug', `Sig Data: ${sdata}`)
+                                        const events = [...thiz._aquaEventParser.parseLogs(logs)]
+                                        for (var j = 0; j < events.length; j++) {
+                                            const ev = events[j]
+                                            if (ev) {
+                                                for (const k of Object.keys(ev.data)) {
+                                                    const evrow = ev.data[k] as any
+                                                    if (typeof evrow['toString'] === 'function') {
+                                                        ev.data[k] = evrow.toString()
+                                                    }
                                                 }
+                                                const evt: EventItem = {
+                                                    tx: txlist[i] as string,
+                                                    index: j,
+                                                    slot: slot as number,
+                                                    event: ev.name,
+                                                    data: ev.data,
+                                                }
+                                                eventList.push(evt)
                                             }
-                                            const evt: EventItem = {
-                                                tx: txlist[i] as string,
-                                                index: j,
-                                                slot: slot as number,
-                                                event: ev.name,
-                                                data: ev.data,
-                                            }
-                                            eventList.push(evt)
                                         }
                                     }
                                 }
-                            }
-                            this._storeSignatures(txlist, slots, message.market).then(() => {
-                                logger.log('debug', `Stored Signatures: ${txlist.length}`)
+                                thiz._storeSignatures(txlist, slots, message.market).then(() => {
+                                    logger.log('debug', `Stored Signatures: ${txlist.length}`)
+                                })
+                                thiz._storeEvents(eventList, message.market, program).then(() => {
+                                    //const evdata = JSON.stringify(eventList, null, 4)
+                                    //logger.log('debug', `Stored Events: ${evdata}`)
+                                    logger.log('debug', `Stored Events: ${eventList.length}`)
+                                })
                             })
-                            this._storeEvents(eventList, message.market, program).then(() => {
-                                //const evdata = JSON.stringify(eventList, null, 4)
-                                //logger.log('debug', `Stored Events: ${evdata}`)
-                                logger.log('debug', `Stored Events: ${eventList.length}`)
-                            })
-                        })
+                        }, 2000, csi, this)
                     })
                 })
             }

@@ -1,0 +1,78 @@
+[
+    {
+        "address": "41G3ZfbZTGYrpRZV7jG1antF5uMzDQUKbKE7ZP2H6pPy",
+        "programId": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR",
+        "name": "bSOL / USDC",
+        "subtitle": "Blaze Staked SOL / USD Coin",
+	"coingecko": "www.coingecko.com/en/coins/blazestake-staked-sol",
+        "description": "Automatically stake your SOL across many validators according to our delegation strategy in order to help further decentralize Solana. The non-custodial liquid stake pool protocol was built partly by Solana Labs and has been audited by three separate organizations. Staked tokens (bSOL) that appreciate in value over time relative to staking rewards.",
+        "image": "/atellix/bSOL-token-1.png",
+	"link": "stake.solblaze.org",
+        "deprecated": false
+    },
+    {
+        "address": "8TD1y52aMon8eovTPmcjUx5EFHhwVxLoMZwPRh2JJThn",
+        "programId": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR",
+        "name": "SOL / USDC",
+        "subtitle": "Wrapped SOL / USD Coin",
+        "coingecko": "www.coingecko.com/en/coins/solana",
+        "description": "Solana SOL / USDC Spot Market",
+        "image": "/atellix/SOL-token-1.png",
+        "deprecated": false
+    },
+    {
+        "address": "25NbTwZ9ixeJwfsx7pHkEapDYC3mDn9NDxJqgTkrCsyk",
+        "programId": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR",
+        "name": "ARB / USDC",
+        "subtitle": "ARB Protocol / USD Coin",
+        "coingecko": "www.coingecko.com/en/coins/arb-protocol",
+        "description": "A Decentralized Arbitrage Protocol. Conducting Arbitrage on the Solana ecosystem.",
+        "link": "arbsolana.com",
+        "image": "/atellix/ARB-token-1.png",
+        "deprecated": false
+    },
+    {
+        "address": "4E3VbaNWX79Z8ke7yeKdvKnUq1MPKs1TjVx28CtTMuFh",
+        "programId": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR",
+        "name": "DUST / USDC",
+        "subtitle": "DUST Protocol / USD Coin",
+	"link": "docs.dustprotocol.com",
+        "coingecko": "www.coingecko.com/en/coins/dust-protocol",
+        "description": "DUST protocol is a decentralized protocol and SPL token created on the Solana blockchain with a starting supply of zero, and a maximum supply of 33,300,000.",
+        "image": "/atellix/DUST-token-1.png",
+        "deprecated": false
+    },
+    {
+        "address": "8MrDZ8kntdVLbybhc8QT1ZZeqCxvdJfN9PyH9c74Yp4L",
+        "programId": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR",
+        "name": "ORCA / USDC",
+        "subtitle": "Orca / USD Coin",
+	"link": "orca.so",
+        "coingecko": "www.coingecko.com/en/coins/orca",
+        "description": "Trade, farm, and build on Solana’s most user-friendly concentrated liquidity AMM. The ORCA governance token has an initial circulating supply of 5.25 million.",
+        "image": "/atellix/ORCA-token-1.png",
+        "deprecated": false
+    },
+    {
+        "address": "2wqCXW8MQHdUpYsy9tMzGR6wLDx33SatWYpHG2evdjEM",
+        "programId": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR",
+        "name": "GMT / USDC",
+        "subtitle": "STEPN Token / USD Coin",
+	"link": "stepn.com",
+        "coingecko": "www.coingecko.com/en/coins/stepn",
+        "description": "STEPN is a Web3 lifestyle app with Social and Game elements. GMT is STEPN’s governance token and pseudo utility token.",
+        "image": "/atellix/GMT-token-1.png",
+        "deprecated": false
+    },
+    {
+        "address": "zVc9vNAckAVZ2o4hAiZLZ88pYPtaeyfmWpJEG3xgfQW",
+        "programId": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR",
+        "name": "PUFF / USDC",
+        "subtitle": "PUFF Token / USD Coin",
+	"link": "www.stonedapecrew.com",
+        "coingecko": "www.coingecko.com/en/coins/puff",
+        "description": "Building a weed lifestyle brand and a next level web3 tech platform, an ecosystem was built around a “green” deflationary token $PUFF, utilized for herb, apparel, rescuing Nuked Apes, Evolutionary Retreats, and other perks.",
+        "image": "/atellix/PUFF-token-1.png",
+        "deprecated": false
+    }
+]

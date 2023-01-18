@@ -39,32 +39,6 @@
       "args": []
     },
     {
-      "name": "deactivate",
-      "accounts": [
-        {
-          "name": "rootData",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "program",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "programData",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "programAdmin",
-          "isMut": true,
-          "isSigner": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "storeMetadata",
       "accounts": [
         {
@@ -2662,6 +2636,6 @@
     }
   ],
   "metadata": {
-    "address": "AQUAvuZCFUGtSc8uQBaTXfJz3YjMUbinMeXDoDQmZLvX"
+    "address": "AQUA3y76EwUE2CgxbaMUMpa54G8PyGRExRdhLK8bN4VR"
   }
 }

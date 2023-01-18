@@ -62,7 +62,7 @@ export class AquaProducer {
 
         // don't use Solana web3.js Connection but custom rpcClient so we have more control and insight what is going on
         const rpcClient = new RPCClient({
-            nodeEndpoint: this._options.nodeEndpoint,
+            nodeEndpoint: this._options.market.nodeEndpoint,
             commitment: this._options.commitment,
             wsEndpointPort: this._options.wsEndpointPort
         })

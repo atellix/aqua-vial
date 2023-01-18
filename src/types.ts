@@ -136,6 +136,7 @@ export type AquaMarket = {
     address: string
     name: string
     programId: string
+    nodeEndpoint: string
     deprecated: boolean
 }
 

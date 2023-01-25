@@ -1,26 +1,26 @@
 {
-  "name": "serum-vial",
-  "version": "1.7.1",
+  "name": "aqua-vial",
+  "version": "1.0.0",
   "engines": {
     "node": ">=15"
   },
-  "description": "Real-time WebSocket market data API server for Serum DEX",
+  "description": "Real-time WebSocket market data API server for the AquaDEX protocol",
   "main": "dist/index.js",
   "source": "src/index.js",
   "types": "dist/index.d.ts",
-  "repository": "tardis-dev/serum-vial",
-  "homepage": "https://github.com/tardis-dev/serum-vial",
+  "repository": "atellix/aqua-vial",
+  "homepage": "https://github.com/atellix/aqu-vial",
   "scripts": {
     "build": "tsc",
     "precommit": "lint-staged",
     "test": "npm run build && jest --forceExit",
     "prepare": "npm run build",
-    "start:debug": "npm run build && node ./bin/serum-vial.js --log-level=debug",
+    "start:debug": "npm run build && node ./bin/aqua-vial.js --log-level=debug",
     "format": "prettier --write .",
     "check-format": "prettier --check ."
   },
   "bin": {
-    "serum-vial": "bin/serum-vial.js"
+    "aqua-vial": "bin/aqua-vial.js"
   },
   "files": [
     "src",
@@ -28,8 +28,8 @@
     "bin"
   ],
   "keywords": [
-    "serum dex",
-    "serum api",
+    "aqua dex",
+    "aqua api",
     "api client",
     "solana",
     "cryptocurrency api",

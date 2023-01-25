@@ -64,6 +64,18 @@ const argv = yargs
         default: ''
     })
 
+    .option('tokens-json', {
+        type: 'string',
+        describe: 'Path to tokens.json definition file',
+        default: ''
+    })
+
+    .option('service-mode', {
+        type: 'string',
+        describe: 'Service mode: "api" (default) or "rpc"',
+        default: 'api'
+    })
+
     .help()
     .version()
     .usage('$0 [options]')
@@ -90,29 +102,40 @@ async function start() {
         }
     }
 
+    const tokensJsonPath = argv['tokens-json']
+    if (tokensJsonPath) {
+        try {
+            const fullPath = path.join(process.cwd(), argv['tokens-json'])
+            tokens = require(fullPath)
+            logger.log('info', `Loaded tokens from ${fullPath}`)
+        } catch (error) {
+            logger.log('error', `Required parameter --tokens-json=<FILE> not found or invalid JSON file: ${error}`)
+            process.exit(1)
+        }
+    }
+
     const options = {
         port,
+        tokens,
+        markets,
+        serviceMode: argv['service-mode'],
         nodeEndpoint: argv['endpoint'],
         wsEndpointPort: argv['ws-endpoint-port'],
         minionsCount: argv['minions-count'],
         commitment: argv['commitment'],
-        bootDelay: argv['boot-delay']
+        bootDelay: argv['boot-delay'],
     }
 
-    logger.log('info', 'Starting aqua-vial server with options', options)
+    //logger.log('info', 'Starting aqua-vial server with options', options)
 
     const startTimestamp = new Date().valueOf()
-    await bootServer({
-        ...options,
-        markets
-    })
-
+    await bootServer(options)
     const bootTimeSeconds = Math.ceil((new Date().valueOf() - startTimestamp) / 1000)
 
     if (isDocker()) {
-        logger.log('info', `Aqua-vial v${pkg.version} is running inside Docker container.`, { bootTimeSeconds })
+        logger.log('info', `Aqua-vial ${options.serviceMode} server v${pkg.version} is running inside Docker container.`, { bootTimeSeconds })
     } else {
-        logger.log('info', `Aqua-vial server v${pkg.version} is running on port ${port}.`, { bootTimeSeconds })
+        logger.log('info', `Aqua-vial ${options.serviceMode} server v${pkg.version} is running.`, { bootTimeSeconds })
     }
 
     logger.log('info', `See https://github.com/atellix/aqua-vial for more information.`)

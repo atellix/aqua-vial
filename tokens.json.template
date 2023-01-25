@@ -1,0 +1,47 @@
+{
+    "So11111111111111111111111111111111111111112": {
+        "name": "Solana ◎",
+        "symbol": "SOL",
+        "image": "https://s2.coinmarketcap.com/static/img/coins/128x128/5426.png"
+    },
+    "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr": {
+        "name": "USD Coin (dev)",
+        "symbol": "USDC",
+        "image": "https://s2.coinmarketcap.com/static/img/coins/128x128/3408.png"
+    },
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {
+        "name": "USD Coin",
+        "symbol": "USDC",
+        "image": "https://s2.coinmarketcap.com/static/img/coins/128x128/3408.png"
+    },
+    "DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ": {
+        "name": "DUST Protocol",
+        "symbol": "DUST",
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ/logo.jpg"
+    },
+    "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE": {
+        "name": "Orca",
+        "symbol": "ORCA",
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE/logo.png"
+    },
+    "7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx": {
+        "name": "STEPN Token",
+        "symbol": "GMT",
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx/logo.png"
+    },
+    "G9tt98aYSznRk7jWsfuz9FnTdokxS6Brohdo9hSmjTRB": {
+        "name": "PUFF",
+        "symbol": "PUFF",
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/G9tt98aYSznRk7jWsfuz9FnTdokxS6Brohdo9hSmjTRB/logo.png"
+    },
+    "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1": {
+        "name": "Blaze Staked SOL",
+        "symbol": "bSOL",
+        "image": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1/logo.png"
+    },
+    "9tzZzEHsKnwFL1A3DyFJwj36KnZj3gZ7g4srWp9YTEoh": {
+        "name": "ARB Protocol",
+        "symbol": "ARB",
+        "image": "https://assets.coingecko.com/coins/images/26046/large/IMG_3600.png?1656916820"
+    }
+}

@@ -7,10 +7,12 @@ import { AquaMarket, AquaMarketStatus } from './types'
 
 export async function bootServer({
     port,
+    tokens,
+    markets,
+    serviceMode,
     nodeEndpoint,
     wsEndpointPort,
     minionsCount,
-    markets,
     commitment,
     bootDelay
 }: BootOptions) {
@@ -32,9 +34,8 @@ export async function bootServer({
 
     for (let i = 0; i < MINIONS_COUNT; i++) {
         const minionWorker = new Worker(path.resolve(__dirname, 'minion.js'), {
-            workerData: { nodeEndpoint, port, markets, minionNumber: i, marketStatus }
+            workerData: { nodeEndpoint, port, markets, tokens, serviceMode, minionNumber: i, marketStatus }
         })
-
         minionWorker.on('error', (err) => {
             logger.log('error', `Minion worker ${minionWorker.threadId} error occurred: ${err.message} ${err.stack}`)
             throw err
@@ -55,43 +56,42 @@ export async function bootServer({
         resolve()
     })
 
-    logger.log('info', `Starting aqua producers for ${markets.length} markets, rpc endpoint: ${nodeEndpoint}`)
+    if (serviceMode === 'rpc') {
+        logger.log('info', `Starting aqua producers for ${markets.length} markets, rpc endpoint: ${nodeEndpoint}`)
+        let readyProducersCount = 0
+        aquaProducerReadyChannel.onmessage = () => readyProducersCount++
+        for (const market of markets) {
+            const aquaProducerWorker = new Worker(path.resolve(__dirname, 'aqua_producer.js'), {
+                workerData: { market, nodeEndpoint, commitment, wsEndpointPort }
+            })
 
-    let readyProducersCount = 0
+            aquaProducerWorker.on('error', (err) => {
+                logger.log(
+                    'error',
+                    `Aqua producer worker ${aquaProducerWorker.threadId} error occurred: ${err.message} ${err.stack}`
+                )
+                throw err
+            })
 
-    aquaProducerReadyChannel.onmessage = () => readyProducersCount++
+            aquaProducerWorker.on('exit', (code) => {
+                logger.log('error', `Aqua producer worker: ${aquaProducerWorker.threadId} died with code: ${code}`)
+            })
 
-    for (const market of markets) {
-        const aquaProducerWorker = new Worker(path.resolve(__dirname, 'aqua_producer.js'), {
-            workerData: { market, nodeEndpoint, commitment, wsEndpointPort }
-        })
-
-        aquaProducerWorker.on('error', (err) => {
-            logger.log(
-                'error',
-                `Aqua producer worker ${aquaProducerWorker.threadId} error occurred: ${err.message} ${err.stack}`
-            )
-            throw err
-        })
-
-        aquaProducerWorker.on('exit', (code) => {
-            logger.log('error', `Aqua producer worker: ${aquaProducerWorker.threadId} died with code: ${code}`)
-        })
-
-        // just in case to not get hit by aqua RPC node rate limits...
-        await wait(bootDelay)
-    }
-
-    await new Promise<void>(async (resolve) => {
-        while (true) {
-            if (readyProducersCount === markets.length) {
-                break
-            }
-            await wait(100)
+            // just in case to not get hit by aqua RPC node rate limits...
+            await wait(bootDelay)
         }
 
-        resolve()
-    })
+        await new Promise<void>(async (resolve) => {
+            while (true) {
+                if (readyProducersCount === markets.length) {
+                    break
+                }
+                await wait(100)
+            }
+
+            resolve()
+        })
+    }
 
     marketInitChannel.postMessage('ready')
 }
@@ -104,10 +104,12 @@ export async function stopServer() {
 
 type BootOptions = {
     port: number
+    tokens: any
+    markets: AquaMarket[]
+    serviceMode: 'rpc' | 'api'
     nodeEndpoint: string
     wsEndpointPort: number | undefined
     minionsCount: number
     commitment: string
-    markets: AquaMarket[]
     bootDelay: number
 }

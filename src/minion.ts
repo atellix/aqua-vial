@@ -82,95 +82,42 @@ type ViewItem = {
 // - WS data publishing to connected clients
 
 class Minion {
-    private readonly _server: TemplatedApp
+    private readonly _server: TemplatedApp | undefined
     private _apiVersion = '1'
     private readonly MAX_MESSAGES_PER_SECOND = 50
+    private MAX_BACKPRESSURE = 3 * 1024 * 1024
 
     // 100 messages per second limit
     private readonly _wsMessagesRateLimit: (ws: any) => boolean = RateLimit(this.MAX_MESSAGES_PER_SECOND, 1000)
-
-    private _sqlClient: Client
-
-    private readonly _defaultToken: { [mint: string]: any } = {
-        'So11111111111111111111111111111111111111112': {
-            'name': 'Solana ◎',
-            'symbol': 'SOL',
-            'image': 'https://s2.coinmarketcap.com/static/img/coins/128x128/5426.png',
-        },
-        'Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr': {
-            'name': 'USD Coin (dev)',
-            'symbol': 'USDC',
-            'image': 'https://s2.coinmarketcap.com/static/img/coins/128x128/3408.png',
-        },
-        'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': {
-            'name': 'USD Coin',
-            'symbol': 'USDC',
-            'image': 'https://s2.coinmarketcap.com/static/img/coins/128x128/3408.png',
-        },
-        'DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ': {
-            'name': 'DUST Protocol',
-            'symbol': 'DUST',
-            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/DUSTawucrTsGU8hcqRdHDCbuYhCPADMLM2VcCb8VnFnQ/logo.jpg',
-        },
-        'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE': {
-            'name': 'Orca',
-            'symbol': 'ORCA',
-            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE/logo.png',
-        },
-        '7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx': {
-            'name': 'STEPN Token',
-            'symbol': 'GMT',
-            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/7i5KKsX2weiTkry7jA4ZwSuXGhs5eJBEjY8vVxR4pfRx/logo.png',
-        },
-        'G9tt98aYSznRk7jWsfuz9FnTdokxS6Brohdo9hSmjTRB': {
-            'name': 'PUFF',
-            'symbol': 'PUFF',
-            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/G9tt98aYSznRk7jWsfuz9FnTdokxS6Brohdo9hSmjTRB/logo.png',
-        },
-	'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1': {
-            'name': 'Blaze Staked SOL',
-            'symbol': 'bSOL',
-            'image': 'https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1/logo.png',
-	},
-	'9tzZzEHsKnwFL1A3DyFJwj36KnZj3gZ7g4srWp9YTEoh': {
-            'name': 'ARB Protocol',
-            'symbol': 'ARB',
-            'image': 'https://assets.coingecko.com/coins/images/26046/large/IMG_3600.png?1656916820',
-	},
-    }
-
     private readonly _l2SnapshotsSerialized: { [market: string]: string } = {}
     private readonly _l3SnapshotsSerialized: { [market: string]: string } = {}
     private readonly _recentTradesSerialized: { [market: string]: string } = {}
     private readonly _quotesSerialized: { [market: string]: string } = {}
     private readonly _marketNames: string[]
+
+    private _sqlClient: Client
+    private _aquaProgram: Program
+    private _aquaEventParser: EventParser
+    private _openConnectionsCount = 0
+    private _cachedListMarketsResponse: string | undefined = undefined
+    private _cachedMarketInfoResponse: { [market: string]: any } = {}
+    private _defaultToken: { [mint: string]: any } = {}
     private _marketBase32: { [market: string]: string } = {}
     private _marketInfo: { [market: string]: any } = {}
     private _listenSocket: any | undefined = undefined
-    private _openConnectionsCount = 0
     private _tid: NodeJS.Timeout | undefined = undefined
-    private _aquaProgram: Program
-    private _aquaEventParser: EventParser
 
+    mode: 'rpc' | 'api'
     status: AquaMarketStatus
     provider: AnchorProvider
 
-    private MAX_BACKPRESSURE = 3 * 1024 * 1024
-    constructor(private readonly _nodeEndpoint: string, private readonly _markets: AquaMarket[], marketStatus: AquaMarketStatus) {
-        this.provider = AnchorProvider.env()
+    constructor(private readonly _nodeEndpoint: string, private readonly _markets: AquaMarket[], tokens: any, serviceMode: 'rpc' | 'api', marketStatus: AquaMarketStatus) {
+        this.mode = serviceMode
         this.status = marketStatus
-        const aquaDexPK = new PublicKey(ANCHOR_IDL['aqua-dex'].metadata.address)
-        this._aquaProgram = new Program(ANCHOR_IDL['aqua-dex'], aquaDexPK, this.provider)
-        this._aquaEventParser = new EventParser(aquaDexPK, this._aquaProgram.coder)
+        this.provider = AnchorProvider.env()
+        this._defaultToken = tokens
         this._marketNames = _markets.map((m) => m.name)
-        _markets.forEach((m) => {
-            var pk = new PublicKey(m.address)
-            var encoder = new base32.Encoder({ type: "crockford", lc: true })
-            this._marketBase32[m.address] = 'm' + encoder.write(new Uint8Array(pk.toBuffer().toJSON().data)).finalize()
-            this._marketInfo[m.address] = { metadata: {}, ...m }
-            this.initMarketInfoCache(m.address, JSON.stringify(this._marketInfo[m.address]))
-        })
-        this._server = this._initServer()
+        this._cachedListMarketsResponse = JSON.stringify(_markets)
         this._sqlClient = new Client({
             host: process.env.POSTGRES_HOST,
             port: parseInt(process.env.POSTGRES_PORT as string),
@@ -178,22 +125,34 @@ class Minion {
             database: process.env.POSTGRES_DATABASE,
             password: process.env.POSTGRES_PASSWORD,
         })
-        this._tid = setInterval(() => {
-            logger.log('debug', `Open WS client connections count: ${this._openConnectionsCount}`, meta)
-        }, 60 * 1000)
-        this.initMarketsCache(JSON.stringify(_markets))
+        const aquaDexPK = new PublicKey(ANCHOR_IDL['aqua-dex'].metadata.address)
+        this._aquaProgram = new Program(ANCHOR_IDL['aqua-dex'], aquaDexPK, this.provider)
+        this._aquaEventParser = new EventParser(aquaDexPK, this._aquaProgram.coder)
+        _markets.forEach((m) => {
+            var pk = new PublicKey(m.address)
+            var encoder = new base32.Encoder({ type: "crockford", lc: true })
+            this._marketBase32[m.address] = 'm' + encoder.write(new Uint8Array(pk.toBuffer().toJSON().data)).finalize()
+            this._marketInfo[m.address] = { metadata: {}, ...m }
+            delete this._marketInfo[m.address]['nodeEndpoint']
+            this._cachedMarketInfoResponse[m.address] = JSON.stringify(this._marketInfo[m.address])
+        })
+        if (serviceMode === 'rpc') {
+            this._tid = setInterval(() => {
+                logger.log('debug', `Open WS client connections count: ${this._openConnectionsCount}`, meta)
+            }, 60 * 1000)
+        } else if (serviceMode === 'api') {
+            this._server = this._initServer()
+        }
     }
 
     private _initServer() {
         const apiPrefix = `/v${this._apiVersion}`
         const useSSL = process.env.KEY_FILE_NAME !== undefined
         const WsApp = useSSL ? SSLApp : App
-        const options = useSSL
-            ? {
-                    key_file_name: process.env.KEY_FILE_NAME,
-                    cert_file_name: process.env.CERT_FILE_NAME
-                }
-            : {}
+        const options = useSSL ? {
+            key_file_name: process.env.KEY_FILE_NAME,
+            cert_file_name: process.env.CERT_FILE_NAME
+        } : {}
         return WsApp(options)
             // Websocket disabled
             /*.ws(`${apiPrefix}/ws`, {
@@ -213,7 +172,6 @@ class Minion {
                 }
             } as any)*/
 
-            //.get(`${apiPrefix}/markets`, this._listMarkets) // TODO
             .post(`${apiPrefix}/history`, this._getMarketHistory)
             .options(`${apiPrefix}/history`, (res) => {
                 this._setCorsHeaders(res)
@@ -243,10 +201,13 @@ class Minion {
 
     public async start(port: number) {
         return new Promise<void>((resolve, reject) => {
-            this._server.listen(process.env.MINION_HOST as string, port, (socket) => {
+            if (this.mode === 'rpc') {
+                resolve()
+            }
+            this._server?.listen(process.env.MINION_HOST as string, port, (socket) => {
                 if (socket) {
                     this._listenSocket = socket
-                    logger.log('info', `Listening on port ${port}`, meta)
+                    logger.log('info', `Minion listening on port ${port}`)
                     resolve()
                 } else {
                     const message = `Failed to listen on port ${port}`
@@ -380,10 +341,10 @@ schedule_interval => INTERVAL '${schedInterval}');`
     }
 
     private async _getTokenMetadata(mintPK: PublicKey) {
-	const mint = mintPK.toString()
-	if (mint in this._defaultToken) {
-	    return this._defaultToken[mint]
-	}
+        const mint = mintPK.toString()
+        if (mint in this._defaultToken) {
+            return this._defaultToken[mint]
+        }
         const dataAddr = await this._programAddress([
             Buffer.from('metadata'),
             METAPLEX_PROGRAM_ID.toBuffer(),
@@ -391,7 +352,7 @@ schedule_interval => INTERVAL '${schedInterval}');`
         ], METAPLEX_PROGRAM_ID)
         try {
             const meta = await Metadata.fromAccountAddress(this.provider.connection, new PublicKey(dataAddr.pubkey))
-	    var metaJson = JSON.stringify(meta)
+	        var metaJson = JSON.stringify(meta)
             logger.log('debug', `Token metadata for: ${dataAddr.pubkey} result: ${metaJson}`)
             var name = meta.data.name
             var symbol = meta.data.symbol
@@ -451,7 +412,7 @@ schedule_interval => INTERVAL '${schedInterval}');`
             }
             marketInfo.metadata.marketToken.mint = mktMint.toString()
             marketInfo.metadata.pricingToken.mint = prcMint.toString()
-            this.initMarketInfoCache(m.address, JSON.stringify(marketInfo))
+            this._cachedMarketInfoResponse[m.address] = JSON.stringify(marketInfo)
         })
     }
 
@@ -733,18 +694,6 @@ schedule_interval => INTERVAL '${schedInterval}');`
         }
     }
 
-    private _cachedListMarketsResponse: string | undefined = undefined
-    private _cachedMarketInfoResponse: { [market: string]: any } = {}
-
-    public initMarketsCache(cachedResponse: string) {
-        this._cachedListMarketsResponse = cachedResponse
-        logger.log('info', 'Cached markets info response', meta)
-    }
-
-    public initMarketInfoCache(market: string, cachedResponse: string) {
-        this._cachedMarketInfoResponse[market] = cachedResponse
-        logger.log('info', 'Cached markets info response', meta)
-    }
 
     //async based on https://github.com/uNetworking/uWebSockets.js/blob/master/examples/AsyncFunction.js
     private _getMarketList = async (res: HttpResponse) => {
@@ -767,6 +716,7 @@ schedule_interval => INTERVAL '${schedInterval}');`
         var rdata: any = await this._getData(res)
         if ('market' in rdata) {
             resp = this._cachedMarketInfoResponse[rdata.market]
+            logger.log('debug', `Get Market Info: market:${rdata.market}`)
         } else {
             logger.log('debug', 'Market parameter not found')
             return this._abortRequest(res, 404)
@@ -995,7 +945,7 @@ schedule_interval => INTERVAL '${schedInterval}');`
                 })
             }
             if (message.publish) {
-                this._server.publish(topic, message.payload)
+                this._server?.publish(topic, message.payload)
             }
         }
     }
@@ -1200,19 +1150,21 @@ schedule_interval => INTERVAL '${schedInterval}');`
     }
 }
 
-const { port, nodeEndpoint, markets, minionNumber, marketStatus } = workerData as {
+const { port, tokens, serviceMode, nodeEndpoint, markets, minionNumber, marketStatus } = workerData as {
     port: number
+    tokens: any
+    serviceMode: 'rpc' | 'api'
     nodeEndpoint: string
     markets: AquaMarket[]
     minionNumber: number
     marketStatus: AquaMarketStatus
 }
 
-const minion = new Minion(nodeEndpoint, markets, marketStatus)
+const minion = new Minion(nodeEndpoint, markets, tokens, serviceMode, marketStatus)
 
 let lastPublishTimestamp = new Date()
 
-if (minionNumber === 0) {
+if (minionNumber === 0 && serviceMode === 'rpc') {
     setInterval(() => {
         const noDataPublishedForSeconds = (new Date().valueOf() - lastPublishTimestamp.valueOf()) / 1000
         if (noDataPublishedForSeconds > 30) {
@@ -1226,19 +1178,20 @@ if (minionNumber === 0) {
 
 minion.start(port).then(async () => {
     await minion.sqlConnect()
-    await minion.createMarkets()
-
-    aquaDataChannel.onmessage = (message) => {
-        lastPublishTimestamp = new Date()
-        minion.processMessages(message.data)
+    if (minion.mode === 'rpc') {
+        await minion.createMarkets()
+        aquaDataChannel.onmessage = (message) => {
+            lastPublishTimestamp = new Date()
+            minion.processMessages(message.data)
+        }
+        marketInitChannel.onmessage = async () => {
+            await minion.initMarkets()
+        }
     }
-
-    marketInitChannel.onmessage = async () => {
-        await minion.initMarkets()
-    }
-
     minionReadyChannel.postMessage('ready')
-    await minion.getMarketMetadata()
+    if (minion.mode === 'api') {
+        await minion.getMarketMetadata()
+    }
 })
 
 cleanupChannel.onmessage = async () => {

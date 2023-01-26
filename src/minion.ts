@@ -136,11 +136,10 @@ class Minion {
             delete this._marketInfo[m.address]['nodeEndpoint']
             this._cachedMarketInfoResponse[m.address] = JSON.stringify(this._marketInfo[m.address])
         })
-        if (serviceMode === 'rpc') {
-            this._tid = setInterval(() => {
-                logger.log('debug', `Open WS client connections count: ${this._openConnectionsCount}`, meta)
-            }, 60 * 1000)
-        } else if (serviceMode === 'api') {
+        /*this._tid = setInterval(() => {
+            logger.log('debug', `Open WS client connections count: ${this._openConnectionsCount}`, meta)
+        }, 60 * 1000)*/
+        if (serviceMode === 'api') {
             this._server = this._initServer()
         }
     }
@@ -831,9 +830,9 @@ schedule_interval => INTERVAL '${schedInterval}');`
             const topic = `${message.type}-${message.market}`
 
             if (logger.level === 'debug') {
-                const diff = new Date().valueOf() - new Date(message.timestamp).valueOf()
+                //const diff = new Date().valueOf() - new Date(message.timestamp).valueOf()
                 const data = JSON.stringify(message.payload)
-                logger.log('debug', `Processing message, topic: ${topic}, receive delay: ${diff}ms, data: ${data}`, meta)
+                logger.log('debug', `Processing message: topic:${topic} data:${data}`, meta)
             }
             if (message.type === 'trade') {
                 if (message.payload.trade_id > (this.status.lastTradeIds[message.market] as number)) {

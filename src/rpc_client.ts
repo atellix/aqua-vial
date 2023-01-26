@@ -183,7 +183,7 @@ class AccountsChangeNotifications {
             readonly commitment: string
         }
     ) {
-        logger.log('info', `Get tradeLog:${accounts.tradeLog} state:${accounts.marketState}`)
+        //logger.log('info', `Watch tradeLog:${accounts.tradeLog} state:${accounts.marketState}`)
         this._accountsMeta = [
             {
                 name: 'tradeLog',
@@ -216,7 +216,7 @@ class AccountsChangeNotifications {
 
         ws.onopen = async () => {
             try {
-                this._subscribeToHeartbeat(ws)
+                //this._subscribeToHeartbeat(ws)
                 this._sendPeriodicPings(ws)
                 this._monitorConnectionIfStale(ws)
 
@@ -475,7 +475,7 @@ class AccountsChangeNotifications {
 
         this._pingTID = setInterval(() => {
             this._sendMessage(ws, { jsonrpc: '2.0', method: 'ping', params: null })
-        }, 3 * 1000)
+        }, 10 * 1000)
     }
 
     private _monitorConnectionIfStale(ws: WebSocket) {

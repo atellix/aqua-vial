@@ -5,6 +5,6 @@ node_modules
 *.swp
 *.swo
 *.pem
-run.sh
+run*.sh
 markets.json
 tokens.json
